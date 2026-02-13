@@ -39,6 +39,19 @@ Typical gates for incremental development:
 - `-trimpath`
 - `CGO_ENABLED=0` by default
 
+## Security library/framework selection
+
+- For security-sensitive features (transport security, authentication, key management, crypto protocols), prefer proven and widely adopted implementations.
+- Prefer standard library primitives first when they satisfy requirements.
+- For third-party dependencies, prefer projects with a strong maintenance record, broad production usage, and clear security posture.
+- Avoid introducing niche or experimental security frameworks without explicit maintainer approval in PR discussion.
+
+## Windows compatibility requirement
+
+- Windows-targeted binaries must work on both native Windows and Wine in CI smoke checks.
+- PRs that change runtime behavior for Windows builds should include/update coverage for both environments.
+- If a dependency is known to break on Wine or native Windows, it is not an acceptable default dependency for Windows paths.
+
 ## Canonical releases
 
 - Container images are built and pushed to GHCR **only** on GitHub Release (`release.published`).

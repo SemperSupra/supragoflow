@@ -40,3 +40,27 @@ jobs:
 
       - name: Build windows amd64
         run: ./scripts/gg build windows amd64
+
+  windows_wine_smoke:
+    runs-on: ubuntu-latest
+    needs: gates
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build windows amd64
+        run: ./scripts/gg build windows amd64
+
+      - name: Install Wine
+        run: |
+          sudo dpkg --add-architecture i386
+          sudo apt-get update
+          sudo apt-get install -y --no-install-recommends wine64 wine32
+
+      - name: Wine smoke test
+        run: |
+          set -euo pipefail
+          EXE="dist/windows-amd64/supragoflow.exe"
+          test -f "$EXE"
+          wine --version
+          wine "$EXE" --version
+          wine "$EXE" --version --json
