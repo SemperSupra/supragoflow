@@ -69,7 +69,7 @@ case "$stage" in
     if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
     out="dist/${goos}-${goarch}"
     # Embed simple version info for local builds
-    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=dev-local -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${name}${ext} ./cmd/supragoflow"
+    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=dev-local -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${name}${ext} ./cmd/supragoflow"
     ;;
   package)
     run "$BUILD_IMAGE" "mkdir -p dist && cd dist && (command -v sha256sum >/dev/null && sha256sum -b */* > SHA256SUMS || true)"
