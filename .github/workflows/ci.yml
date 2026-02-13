@@ -1,0 +1,42 @@
+name: CI
+
+on:
+  pull_request:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  gates:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Bootstrap
+        run: ./scripts/gg bootstrap
+
+      - name: Dependencies
+        run: ./scripts/gg deps
+
+      - name: Format
+        run: ./scripts/gg fmt
+
+      - name: Vet
+        run: ./scripts/gg vet
+
+      - name: Lint
+        run: ./scripts/gg lint
+
+      - name: Vulnerability check
+        run: ./scripts/gg vuln
+
+      - name: Test
+        run: ./scripts/gg test
+
+      - name: Build linux amd64
+        run: ./scripts/gg build linux amd64
+
+      - name: Build windows amd64
+        run: ./scripts/gg build windows amd64

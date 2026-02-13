@@ -1,0 +1,155 @@
+name: Enforce invite-only contributions
+
+on:
+  issues:
+    types: [opened, reopened]
+  pull_request_target:
+    types: [opened, reopened]
+
+permissions:
+  contents: read
+  issues: write
+  pull-requests: write
+
+jobs:
+  enforce:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Enforce policy
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const owner = context.repo.owner;
+            const repo = context.repo.repo;
+            const actor = (context.actor || "").toLowerCase();
+
+            // Determine safe base ref to read allowlist from (never from PR head)
+            const defaultBranch = context.payload.repository?.default_branch || "main";
+            const baseRef = context.payload.pull_request?.base?.ref || defaultBranch;
+
+            const path = ".github/allowlist.yml";
+            const { data: content } = await github.rest.repos.getContent({ owner, repo, path, ref: baseRef });
+            const yamlText = Buffer.from(content.content, content.encoding).toString("utf8");
+
+            function parseList(section) {
+              // section: (start at "section:" line, include subsequent "- item" indented lines)
+              const lines = yamlText.split(/\r?\n/);
+              let inSection = false;
+              const out = [];
+              for (const line of lines) {
+                if (!inSection) {
+                  if (new RegExp(`^${section}:\s*$`).test(line.trimEnd())) inSection = true;
+                  continue;
+                }
+                if (/^\S/.test(line) && !line.startsWith("  -") && !line.startsWith("-")) break; // next top-level key
+                const m = line.trim().match(/^-\s+(.*)$/);
+                if (m) out.push(m[1].trim());
+              }
+              return out;
+            }
+
+            function parseBool(key, defVal) {
+              const m = yamlText.match(new RegExp(`^\s*${key}:\s*(true|false)\s*$`, "m"));
+              return m ? (m[1] === "true") : defVal;
+            }
+
+            const humans = parseList("humans").map(s => s.toLowerCase());
+            const agents = parseList("agents").map(s => s.toLowerCase());
+            const designatedFork = parseList("designated_fork_contributors").map(s => s.toLowerCase());
+
+            const policy = {
+              allow_org_members: parseBool("allow_org_members", true),
+              allow_repo_collaborators: parseBool("allow_repo_collaborators", true),
+              deny_forks_by_default: parseBool("deny_forks_by_default", true),
+              require_membership_for_fork_exceptions: parseBool("require_membership_for_fork_exceptions", true),
+              lock_closed: parseBool("lock_closed", false),
+            };
+
+            const allowlisted = new Set([...humans, ...agents]);
+            const forkDesignates = new Set(designatedFork);
+
+            async function isOrgMember() {
+              if (!policy.allow_org_members) return false;
+              try {
+                await github.rest.orgs.checkMembershipForUser({ org: owner, username: context.actor });
+                return true;
+              } catch { return false; }
+            }
+
+            async function isRepoCollaborator() {
+              if (!policy.allow_repo_collaborators) return false;
+              try {
+                await github.rest.repos.checkCollaborator({ owner, repo, username: context.actor });
+                return true;
+              } catch { return false; }
+            }
+
+            async function actorAllowedNonFork() {
+              if (allowlisted.has(actor)) return true;
+              if (await isOrgMember()) return true;
+              if (await isRepoCollaborator()) return true;
+              return false;
+            }
+
+            const inviteOnlyMsg =
+              `Thanks for your interest. This repository is **invite-only** for Issues and Pull Requests.\n\n` +
+              `If you need access, contact the maintainers out-of-band and include your GitHub username.\n\n` +
+              `Note: PRs from forks are not accepted except from designated fork contributors.`;
+
+            const forkMsg =
+              `Thanks for your interest. This repository is **invite-only** for Pull Requests.\n\n` +
+              `PRs from forks are **not accepted**, except from designated fork contributors.\n\n` +
+              `If you need access, contact the maintainers out-of-band and include your GitHub username.`;
+
+            async function closeIssue(issue_number, body) {
+              await github.rest.issues.createComment({ owner, repo, issue_number, body });
+              await github.rest.issues.update({ owner, repo, issue_number, state: "closed" });
+              if (policy.lock_closed) {
+                await github.rest.issues.lock({ owner, repo, issue_number, lock_reason: "resolved" });
+              }
+            }
+
+            async function closePR(pull_number, body) {
+              await github.rest.issues.createComment({ owner, repo, issue_number: pull_number, body });
+              await github.rest.pulls.update({ owner, repo, pull_number, state: "closed" });
+              if (policy.lock_closed) {
+                await github.rest.issues.lock({ owner, repo, issue_number: pull_number, lock_reason: "resolved" });
+              }
+            }
+
+            if (context.eventName === "issues") {
+              const issue_number = context.payload.issue.number;
+              const ok = await actorAllowedNonFork();
+              if (ok) return;
+              await closeIssue(issue_number, inviteOnlyMsg);
+              return;
+            }
+
+            if (context.eventName === "pull_request_target") {
+              const pr = context.payload.pull_request;
+              const pr_number = pr.number;
+
+              const isFork = pr.head.repo.full_name.toLowerCase() !== pr.base.repo.full_name.toLowerCase();
+
+              if (isFork && policy.deny_forks_by_default) {
+                const isDesignated = forkDesignates.has(actor);
+                if (!isDesignated) {
+                  await closePR(pr_number, forkMsg);
+                  return;
+                }
+                if (policy.require_membership_for_fork_exceptions) {
+                  const memberOk = (await isOrgMember()) || (await isRepoCollaborator());
+                  if (!memberOk) {
+                    await closePR(pr_number, forkMsg);
+                    return;
+                  }
+                }
+                // designated fork contributor allowed
+                return;
+              }
+
+              const ok = await actorAllowedNonFork();
+              if (ok) return;
+
+              await closePR(pr_number, inviteOnlyMsg);
+            }

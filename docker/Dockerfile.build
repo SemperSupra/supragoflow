@@ -1,0 +1,14 @@
+# syntax=docker/dockerfile:1
+FROM debian:trixie-slim
+
+ARG GO_VERSION=1.25.7
+ARG TARGETARCH
+
+RUN apt-get update && apt-get install -y --no-install-recommends       ca-certificates git wget bash     && rm -rf /var/lib/apt/lists/*
+
+RUN set -eux;     case "${TARGETARCH}" in       amd64) GOARCH=amd64 ;;       arm64) GOARCH=arm64 ;;       *) echo "unsupported TARGETARCH=${TARGETARCH}" >&2; exit 1 ;;     esac;     cd /tmp;     wget -q "https://dl.google.com/go/go${GO_VERSION}.linux-${GOARCH}.tar.gz";     wget -q "https://dl.google.com/go/go${GO_VERSION}.linux-${GOARCH}.tar.gz.sha256";     echo "$(cat "go${GO_VERSION}.linux-${GOARCH}.tar.gz.sha256")  go${GO_VERSION}.linux-${GOARCH}.tar.gz" | sha256sum -c -;     tar -C /usr/local -xzf "go${GO_VERSION}.linux-${GOARCH}.tar.gz";     rm -f /tmp/go*.tar.gz /tmp/go*.sha256
+
+ENV PATH="/usr/local/go/bin:${PATH}"     GOPATH="/go"     GOCACHE="/go-cache"     GOMODCACHE="/go/pkg/mod"     CGO_ENABLED=0
+
+WORKDIR /work
+CMD ["bash", "-lc", "go version && echo supragoflow-build ready"]

@@ -1,0 +1,106 @@
+#!/usr/bin/env bash
+set -euo pipefail
+
+ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
+WORKDIR="/work"
+
+DEV_IMAGE="${SUPRAGOFLOW_DEV_IMAGE:-supragoflow-dev:local}"
+BUILD_IMAGE="${SUPRAGOFLOW_BUILD_IMAGE:-supragoflow-build:local}"
+
+# Named volumes for speed (safe for humans/agents)
+MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
+CACHEVOL="${SUPRAGOFLOW_CACHEVOL:-supragoflow-gocache}"
+
+in_container() {
+  [[ -f "/.dockerenv" ]] || [[ "${SUPRAGOFLOW_IN_CONTAINER:-}" == "1" ]]
+}
+
+image_exists() {
+  docker image inspect "$1" >/dev/null 2>&1
+}
+
+ensure_images() {
+  # Build locally if missing (incremental bring-up friendly)
+  if ! image_exists "$BUILD_IMAGE"; then
+    echo "[gg] building build image: $BUILD_IMAGE" >&2
+    docker build -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+  fi
+  if ! image_exists "$DEV_IMAGE"; then
+    echo "[gg] building dev image: $DEV_IMAGE" >&2
+    docker build -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+  fi
+}
+
+run_in_image() {
+  local image="$1"; shift
+  docker run --rm -t     -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}"     -v "${CACHEVOL}:/go-cache"     -v "${MODVOL}:/go/pkg/mod"     -e GOCACHE=/go-cache     -e GOMODCACHE=/go/pkg/mod     -e GOPATH=/go     "$image" bash -c "$*"
+}
+
+run() {
+  local image="$1"; shift
+  if in_container; then
+    bash -c "$*"
+  else
+    ensure_images
+    run_in_image "$image" "$*"
+  fi
+}
+
+stage="${1:-}"; shift || true
+
+case "$stage" in
+  bootstrap)
+    run "$DEV_IMAGE" 'go version && go env GOPATH GOMODCACHE GOCACHE && (command -v golangci-lint >/dev/null && golangci-lint version || true) && (command -v govulncheck >/dev/null && govulncheck -h >/dev/null || true)'
+    ;;
+  deps) run "$DEV_IMAGE" 'go mod download' ;;
+  tidy) run "$DEV_IMAGE" 'go mod tidy' ;;
+  fmt)  run "$DEV_IMAGE" 'go fmt ./...' ;;
+  vet)  run "$DEV_IMAGE" 'go vet ./...' ;;
+  lint) run "$DEV_IMAGE" 'golangci-lint run' ;;
+  vuln) run "$DEV_IMAGE" 'govulncheck ./...' ;;
+  test)
+    run "$DEV_IMAGE" 'command -v gotestsum >/dev/null && gotestsum -- ./... || go test ./...'
+    ;;
+  build)
+    goos="${1:-linux}"
+    goarch="${2:-amd64}"
+    name="supragoflow"
+    ext=""
+    if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
+    out="dist/${goos}-${goarch}"
+    # Embed simple version info for local builds
+    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=dev-local -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${name}${ext} ./cmd/supragoflow"
+    ;;
+  package)
+    run "$BUILD_IMAGE" "mkdir -p dist && cd dist && (command -v sha256sum >/dev/null && sha256sum -b */* > SHA256SUMS || true)"
+    ;;
+  images)
+    if in_container; then
+      echo "Refusing to build Docker images from inside a container." >&2
+      exit 2
+    fi
+    echo "[gg] building build image: $BUILD_IMAGE" >&2
+    docker build -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+    echo "[gg] building dev image: $DEV_IMAGE" >&2
+    docker build -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+    ;;
+  *)
+    cat <<'USAGE'
+usage: gg <stage> [args]
+
+stages:
+  bootstrap
+  deps
+  tidy
+  fmt
+  vet
+  lint
+  vuln
+  test
+  build <goos> <goarch>
+  package
+  images   (build local images on host)
+USAGE
+    exit 2
+    ;;
+esac

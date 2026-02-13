@@ -1,0 +1,21 @@
+policy:
+  allow_org_members: true
+  allow_repo_collaborators: true
+
+  deny_forks_by_default: true
+  require_membership_for_fork_exceptions: true
+  lock_closed: false
+
+humans:
+  - mark-e-deyoung
+
+agents:
+  # Add the *actual GitHub usernames* the agent tools authenticate as (recommended: dedicated bot accounts)
+  - codex-bot
+  - codex-cli-bot
+  - gemini-cli-bot
+  - google-jules-bot
+
+designated_fork_contributors:
+  # Only these identities may open PRs from forks.
+  - mark-e-deyoung
