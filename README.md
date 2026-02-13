@@ -10,6 +10,15 @@ It provides a **single lifecycle entrypoint** (`./scripts/gg`) that works for:
 
 Targets: **Linux + Windows** (cross-compile). No GUI and no heavy CGO.
 
+## Secure comms package
+
+This repo now includes `internal/securecomms` with proven primitives for secure channel development:
+
+- TLS client/server config builders (including optional mutual TLS)
+- SSH client config builder with strict `known_hosts` validation
+
+The implementation prefers Go standard library crypto/TLS and `golang.org/x/crypto/ssh`.
+
 ## Canonical releases (GHCR)
 
 **Prefer GHCR-published images tagged to GitHub Releases as the canonical toolchain.**
