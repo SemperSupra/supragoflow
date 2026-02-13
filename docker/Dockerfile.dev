@@ -2,7 +2,7 @@
 FROM debian:trixie-slim
 
 ARG GO_VERSION=1.25.7
-ARG GOLANGCI_LINT_VERSION=latest
+ARG GOLANGCI_LINT_VERSION=2.9.0
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends       ca-certificates git wget bash jq     && rm -rf /var/lib/apt/lists/*
