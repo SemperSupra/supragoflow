@@ -10,11 +10,16 @@ CI workflows should not invent bespoke command sequences beyond calling `gg`.
 
 ## Toolchain pinning
 
-- Debian base: `debian:trixie-slim`
-- Go version is pinned via `GO_VERSION` build arg in Dockerfiles.
-- `golangci-lint` version is pinned via `GOLANGCI_LINT_VERSION` build arg.
+All toolchain versions are pinned in the `.versions` file at the root of the repository.
 
-Updates occur via PR.
+- `DEBIAN_BASE`: Base image for all containers.
+- `GO_VERSION`: Go version used for building and development.
+- `GOLANGCI_LINT_VERSION`: Version of `golangci-lint`.
+- `GOVULNCHECK_VERSION`: Version of `govulncheck`.
+- `GOTESTSUM_VERSION`: Version of `gotestsum`.
+
+To upgrade any tool, update the corresponding version in `.versions` and submit a PR.
+The `scripts/gg` tool automatically uses these versions when building images.
 
 ## Dependency discipline
 
