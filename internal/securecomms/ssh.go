@@ -10,6 +10,37 @@ import (
 	"golang.org/x/crypto/ssh/knownhosts"
 )
 
+// secureSSHCiphers lists preferred AEAD ciphers and strong CTR modes.
+// It avoids CBC modes which are vulnerable to padding oracle attacks.
+var secureSSHCiphers = []string{
+	"chacha20-poly1305@openssh.com",
+	"aes128-gcm@openssh.com",
+	"aes256-gcm@openssh.com",
+	"aes128-ctr",
+	"aes192-ctr",
+	"aes256-ctr",
+}
+
+// secureSSHKeyExchanges lists preferred key exchange algorithms, prioritizing
+// modern elliptic curves (Curve25519) and strong NIST curves.
+var secureSSHKeyExchanges = []string{
+	"curve25519-sha256",
+	"curve25519-sha256@libssh.org",
+	"ecdh-sha2-nistp256",
+	"ecdh-sha2-nistp384",
+	"ecdh-sha2-nistp521",
+	"diffie-hellman-group14-sha256",
+}
+
+// secureSSHMACs lists preferred message authentication code algorithms,
+// prioritizing Encrypt-then-MAC (EtM) modes and SHA-2.
+var secureSSHMACs = []string{
+	"hmac-sha2-256-etm@openssh.com",
+	"hmac-sha2-512-etm@openssh.com",
+	"hmac-sha2-256",
+	"hmac-sha2-512",
+}
+
 // NewSSHClientConfig builds a strict SSH client config using known_hosts validation.
 func NewSSHClientConfig(user string, privateKeyPEM []byte, knownHostsData []byte) (*ssh.ClientConfig, error) {
 	if user == "" {
@@ -27,6 +58,10 @@ func NewSSHClientConfig(user string, privateKeyPEM []byte, knownHostsData []byte
 		return nil, fmt.Errorf("failed to parse private key: %w", err)
 	}
 
+	// We use a temporary file for known_hosts because the proven knownhosts package
+	// from golang.org/x/crypto/ssh/knownhosts only accepts file paths, not io.Reader.
+	// While suboptimal, using the battle-hardened parser is safer than implementing
+	// a custom one. We ensure the file is cleaned up.
 	tmpFile, err := os.CreateTemp("", "known_hosts_*")
 	if err != nil {
 		return nil, fmt.Errorf("failed to create temp known_hosts file: %w", err)
@@ -51,6 +86,11 @@ func NewSSHClientConfig(user string, privateKeyPEM []byte, knownHostsData []byte
 	}
 
 	return &ssh.ClientConfig{
+		Config: ssh.Config{
+			Ciphers:      secureSSHCiphers,
+			KeyExchanges: secureSSHKeyExchanges,
+			MACs:         secureSSHMACs,
+		},
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: hostKeyCallback,
