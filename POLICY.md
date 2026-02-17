@@ -60,6 +60,7 @@ Typical gates for incremental development:
 ## Canonical releases
 
 - Container images are built and pushed to GHCR **only** on GitHub Release (`release.published`).
+- The system follows a "pull first" policy: builds attempt to pull images from GHCR before building locally, unless developing local changes that require a rebuild.
 - Users/agents should prefer GHCR release tags over local images.
 
 ## Contribution policy (Option C)
