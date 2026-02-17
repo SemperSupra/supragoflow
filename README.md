@@ -17,6 +17,8 @@ This repo now includes `internal/securecomms` with proven primitives for secure 
 - TLS client/server config builders (including optional mutual TLS)
 - SSH client config builder with strict `known_hosts` validation
 
+See [docs/securecomms.md](docs/securecomms.md) for detailed documentation and examples.
+
 The implementation prefers Go standard library crypto/TLS and `golang.org/x/crypto/ssh`.
 
 ## Canonical releases (GHCR)
@@ -48,6 +50,24 @@ Images published on release:
 ```
 
 Outputs land in `dist/<goos>-<goarch>/`.
+
+## Development Commands
+
+The `./scripts/gg` entrypoint supports the following stages:
+
+| Command | Description |
+| :--- | :--- |
+| `bootstrap` | Verify environment tools and go version |
+| `deps` | Download dependencies (`go mod download`) |
+| `tidy` | Tidy dependencies (`go mod tidy`) |
+| `fmt` | Format code (`go fmt`) |
+| `vet` | Run static analysis (`go vet`) |
+| `lint` | Run linter (`golangci-lint`) |
+| `vuln` | Run vulnerability check (`govulncheck`) |
+| `test` | Run tests |
+| `build <goos> <goarch>` | Build binary for target OS/Arch |
+| `package` | Package artifacts (create checksums) |
+| `images` | Build local Docker images |
 
 ## VS Code Dev Container
 
@@ -85,3 +105,11 @@ This repo is public, but Issues/PRs are **invite-only by behavior**:
 - Agents are supported via a whitelist of GitHub usernames (bot identities).
 
 See `CONTRIBUTING.md` and `.github/allowlist.yml`.
+
+## Documentation Index
+
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines.
+- [POLICY.md](POLICY.md) - Project policies (tooling, security, releases).
+- [docs/securecomms.md](docs/securecomms.md) - Documentation for the secure communications package.
+- [docs/work-log.md](docs/work-log.md) - Detailed work logs and integration status.
+- [STATUS.md](STATUS.md) - High-level project status.
