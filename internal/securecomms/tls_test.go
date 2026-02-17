@@ -18,7 +18,8 @@ func TestNewTLSClientConfig(t *testing.T) {
 		t.Fatalf("generateCA: %v", err)
 	}
 
-	cfg, err := NewTLSClientConfig(caPEM, "example.com", nil, nil)
+	// Test with trustSystemCAs = false
+	cfg, err := NewTLSClientConfig(caPEM, "example.com", nil, nil, false)
 	if err != nil {
 		t.Fatalf("NewTLSClientConfig returned error: %v", err)
 	}
@@ -31,13 +32,38 @@ func TestNewTLSClientConfig(t *testing.T) {
 	if cfg.RootCAs == nil {
 		t.Fatal("expected RootCAs to be set")
 	}
+	if len(cfg.CipherSuites) == 0 {
+		t.Fatal("expected CipherSuites to be set")
+	}
+	// Verify strict cipher suites
+	for _, cs := range cfg.CipherSuites {
+		found := false
+		for _, allowed := range secureCipherSuites {
+			if cs == allowed {
+				found = true
+				break
+			}
+		}
+		if !found {
+			t.Errorf("CipherSuite %d is not in the allowed list", cs)
+		}
+	}
+
+	// Test with trustSystemCAs = true (should not error, but harder to verify impact without actual system roots)
+	cfg2, err := NewTLSClientConfig(caPEM, "example.com", nil, nil, true)
+	if err != nil {
+		t.Fatalf("NewTLSClientConfig(trustSystemCAs=true) returned error: %v", err)
+	}
+	if cfg2.RootCAs == nil {
+		t.Fatal("expected RootCAs to be set")
+	}
 }
 
 func TestNewTLSClientConfigInvalidInput(t *testing.T) {
-	if _, err := NewTLSClientConfig([]byte("bad"), "example.com", nil, nil); err == nil {
+	if _, err := NewTLSClientConfig([]byte("bad"), "example.com", nil, nil, false); err == nil {
 		t.Fatal("expected error for invalid CA PEM")
 	}
-	if _, err := NewTLSClientConfig(nil, "", nil, nil); err == nil {
+	if _, err := NewTLSClientConfig(nil, "", nil, nil, false); err == nil {
 		t.Fatal("expected error for empty serverName")
 	}
 }
@@ -61,6 +87,9 @@ func TestNewTLSServerConfigMutualTLS(t *testing.T) {
 	}
 	if cfg.ClientCAs == nil {
 		t.Fatal("expected ClientCAs to be set")
+	}
+	if len(cfg.CipherSuites) == 0 {
+		t.Fatal("expected CipherSuites to be set")
 	}
 }
 

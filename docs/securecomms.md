@@ -5,10 +5,12 @@ The `internal/securecomms` package provides helper functions to create secure TL
 ## TLS Configuration
 
 The package simplifies creating `tls.Config` objects for both clients and servers, enforcing TLS 1.2+ and proper certificate handling.
+It enforces a strict list of AEAD-based cipher suites for TLS 1.2 to ensure strong security.
 
 ### Client Configuration
 
 Use `NewTLSClientConfig` to create a `tls.Config` for a client. It supports mutual TLS (mTLS) if client certificates are provided.
+It also allows controlling whether to trust the system's root CAs via the `trustSystemCAs` parameter.
 
 ```go
 package main
@@ -38,6 +40,7 @@ func main() {
 		"server.example.com", // Expected ServerName
 		clientCertPEM,        // Optional: nil or empty if not using mTLS
 		clientKeyPEM,         // Optional: nil or empty if not using mTLS
+		false,                // trustSystemCAs: false (only trust provided CA)
 	)
 	if err != nil {
 		log.Fatalf("Failed to create TLS config: %v", err)
@@ -104,6 +107,7 @@ func main() {
 ## SSH Configuration
 
 The package provides `NewSSHClientConfig` to create a strict `ssh.ClientConfig` that validates host keys against a provided `known_hosts` data.
+It enforces a strict set of Ciphers, Key Exchanges, and MACs, prioritizing AEAD and modern elliptic curves.
 
 ### Client Configuration
 
