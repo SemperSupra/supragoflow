@@ -27,6 +27,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Load versions
+        run: |
+          cat .versions >> $GITHUB_ENV
+
       - name: Build & push build image
         uses: docker/build-push-action@v6
         with:
@@ -34,6 +38,9 @@ jobs:
           file: docker/Dockerfile.build
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            GO_VERSION=${{ env.GO_VERSION }}
+            DEBIAN_BASE=${{ env.DEBIAN_BASE }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/supragoflow-build:${{ github.event.release.tag_name }}
 
@@ -44,5 +51,11 @@ jobs:
           file: docker/Dockerfile.dev
           platforms: linux/amd64,linux/arm64
           push: true
+          build-args: |
+            GO_VERSION=${{ env.GO_VERSION }}
+            GOLANGCI_LINT_VERSION=${{ env.GOLANGCI_LINT_VERSION }}
+            GOVULNCHECK_VERSION=${{ env.GOVULNCHECK_VERSION }}
+            GOTESTSUM_VERSION=${{ env.GOTESTSUM_VERSION }}
+            DEBIAN_BASE=${{ env.DEBIAN_BASE }}
           tags: |
             ghcr.io/${{ github.repository_owner }}/supragoflow-dev:${{ github.event.release.tag_name }}
