@@ -50,17 +50,12 @@ jobs:
       - name: Build windows amd64
         run: ./scripts/gg build windows amd64
 
-      - name: Install Wine
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends wine wine64 wine32
-
-      - name: Wine smoke test
+      - name: WineBot smoke test
         run: |
           set -euo pipefail
           EXE="dist/windows-amd64/supragoflow.exe"
           test -f "$EXE"
-          wine --version
-          wine "$EXE" --version
-          wine "$EXE" --version --json
+          # Run the Windows binary using the WineBot container
+          # The repo root is mounted to /apps inside the container
+          # Note: run-app.sh is at /scripts/run-app.sh in the container image
+          docker run --rm -v $PWD:/apps -w /apps ghcr.io/mark-e-deyoung/winebot:latest-rel-runner /scripts/run-app.sh "/apps/$EXE" --mode headless --args "--version --json"
