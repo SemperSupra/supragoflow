@@ -4,17 +4,20 @@
 
 Result:
 - `supragoflow.exe` runs correctly under Wine when executed directly as `winebot` user in WineBot container.
-- WineBot launcher path (`scripts/run-app.sh` headless attached flow) was problematic for CLI-style EXEs but is now fixed.
-- WineBot issue #2 (launcher behavior) is closed/fixed in WineBot v0.9.5+.
+- WineBot launcher path (`scripts/run-app.sh` headless attached flow) is the problem area for CLI-style EXEs.
 
 Artifacts and issue filed:
-- WineBot issue: `https://github.com/mark-e-deyoung/WineBot/issues/2` (Closed)
-- Confirmed fix availability in `ghcr.io/mark-e-deyoung/winebot:latest-rel-runner`.
+- WineBot issue: `https://github.com/mark-e-deyoung/WineBot/issues/2`
+- Repro + logs + patch draft gist: `https://gist.github.com/mark-e-deyoung/c96406c7cfc7ba6c4d99eebe64e51048`
+- Local artifact bundle: `/tmp/winebot-supragoflow-issue`
 
-## Resume Plan (Resolved)
+## Resume Plan (after WineBot check)
 
-1. WineBot issue verified as closed.
-2. CI updated to use WineBot container for Windows smoke testing, ensuring launcher compatibility.
+1. Pull/check WineBot issue updates and merged fix.
+2. Re-run WineBot validation for SupraGoFlow EXE:
+   - `./scripts/run-app.sh /apps/supragoflow.exe --mode headless --args "--version --json"`
+3. If fixed, capture successful output and update this file.
+4. Optionally add/strengthen SupraGoFlow CI path that validates WineBot launcher compatibility (not just bare Wine).
 
 ## Quick Resume Commands
 
@@ -25,4 +28,11 @@ cd /home/mark/Projects/SupraGoFlow/workspace/supragoflow
 git pull --ff-only
 ./scripts/gg test
 ./scripts/gg build windows amd64
+```
+
+From WineBot repo (current repro path):
+
+```bash
+cd /home/mark/Projects/WineBot
+./scripts/run-app.sh /apps/supragoflow.exe --mode headless --args "--version --json"
 ```

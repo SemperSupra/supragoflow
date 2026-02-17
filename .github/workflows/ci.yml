@@ -61,5 +61,5 @@ jobs:
       - name: Build windows amd64
         run: ./scripts/gg build windows amd64
 
-      - name: WineBot smoke test
+      - name: Wine smoke test
         run: ./scripts/gg smoke-windows
