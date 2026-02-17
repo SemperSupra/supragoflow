@@ -9,3 +9,7 @@ This repository is **invite-only** for Issues and Pull Requests.
 Allowlists are managed in `.github/allowlist.yml`.
 
 If you need access, contact the maintainers out-of-band and include your GitHub username.
+
+## Project Policies
+
+Please refer to [POLICY.md](POLICY.md) for detailed policies regarding tooling, dependencies, security, and releases.
