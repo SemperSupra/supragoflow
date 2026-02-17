@@ -18,6 +18,7 @@ BUILD_ARGS=(
 
 DEV_IMAGE="${SUPRAGOFLOW_DEV_IMAGE:-supragoflow-dev:local}"
 BUILD_IMAGE="${SUPRAGOFLOW_BUILD_IMAGE:-supragoflow-build:local}"
+WINE_IMAGE="ghcr.io/mark-e-deyoung/winebot:v0.9.5-rel-runner"
 
 # Named volumes for speed (safe for humans/agents)
 MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
@@ -31,7 +32,32 @@ image_exists() {
   docker image inspect "$1" >/dev/null 2>&1
 }
 
+pull_images() {
+  local org="${GHCR_ORG:-SemperSupra}"
+  # convert org to lowercase
+  org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
+
+  local build_remote="ghcr.io/$org/supragoflow-build:latest"
+  local dev_remote="ghcr.io/$org/supragoflow-dev:latest"
+
+  if ! image_exists "$BUILD_IMAGE"; then
+    if docker pull "$build_remote" >/dev/null 2>&1; then
+      echo "[gg] pulled build image from $build_remote" >&2
+      docker tag "$build_remote" "$BUILD_IMAGE"
+    fi
+  fi
+
+  if ! image_exists "$DEV_IMAGE"; then
+    if docker pull "$dev_remote" >/dev/null 2>&1; then
+      echo "[gg] pulled dev image from $dev_remote" >&2
+      docker tag "$dev_remote" "$DEV_IMAGE"
+    fi
+  fi
+}
+
 ensure_images() {
+  pull_images
+
   # Build locally if missing (incremental bring-up friendly)
   if ! image_exists "$BUILD_IMAGE"; then
     echo "[gg] building build image: $BUILD_IMAGE" >&2
@@ -96,6 +122,18 @@ case "$stage" in
     echo "[gg] building dev image: $DEV_IMAGE" >&2
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
+  smoke-windows)
+    exe="dist/windows-amd64/supragoflow.exe"
+    if [[ ! -f "$exe" ]]; then
+      echo "binary not found: $exe (run 'gg build windows amd64' first)" >&2
+      exit 1
+    fi
+    # We must run with direct volume mount and entrypoint
+    docker run --rm \
+      -v "$(pwd)/$exe:/app/supragoflow.exe" \
+      --entrypoint wine \
+      "$WINE_IMAGE" /app/supragoflow.exe --version --json
+    ;;
   *)
     cat <<'USAGE'
 usage: gg <stage> [args]
@@ -112,6 +150,7 @@ stages:
   build <goos> <goarch>
   package
   images   (build local images on host)
+  smoke-windows
 USAGE
     exit 2
     ;;
