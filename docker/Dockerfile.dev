@@ -14,8 +14,8 @@ RUN set -eux;     case "${TARGETARCH}" in       amd64) GOARCH=amd64 ;;       arm
 
 ENV PATH="/usr/local/go/bin:${PATH}:/go/bin"     GOPATH="/go"     GOCACHE="/go-cache"     GOMODCACHE="/go/pkg/mod"     CGO_ENABLED=0
 
-# Install golangci-lint (latest by default, or set GOLANGCI_LINT_VERSION to pin)
-RUN set -eux;     if [ "${GOLANGCI_LINT_VERSION}" = "latest" ]; then LINT_TAG="latest"; else LINT_TAG="v${GOLANGCI_LINT_VERSION#v}"; fi;     wget -qO- https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh       | sh -s -- -b /usr/local/bin "${LINT_TAG}";     golangci-lint version
+# Install golangci-lint (pinned, built from source to match GO_VERSION)
+RUN set -eux;     go install github.com/golangci/golangci-lint/cmd/golangci-lint@${GOLANGCI_LINT_VERSION};     golangci-lint version
 
 # Install govulncheck (pinned)
 RUN set -eux;     go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VERSION};     govulncheck -h >/dev/null
