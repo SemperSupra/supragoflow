@@ -19,16 +19,28 @@ image_exists() {
   docker image inspect "$1" >/dev/null 2>&1
 }
 
+ensure_image() {
+  local image="$1"
+  local dockerfile="$2"
+  local repo_name="$3"
+
+  if ! image_exists "$image"; then
+    local cache_image="ghcr.io/sempersupra/${repo_name}:latest"
+    echo "[gg] image $image not found. Attempting to pull $cache_image..." >&2
+    if docker pull "$cache_image"; then
+      echo "[gg] pulled $cache_image. Building with cache..." >&2
+      docker build --cache-from "$cache_image" -f "${ROOT}/${dockerfile}" -t "$image" "$ROOT"
+    else
+      echo "[gg] pull failed. Building from scratch..." >&2
+      docker build -f "${ROOT}/${dockerfile}" -t "$image" "$ROOT"
+    fi
+  fi
+}
+
 ensure_images() {
   # Build locally if missing (incremental bring-up friendly)
-  if ! image_exists "$BUILD_IMAGE"; then
-    echo "[gg] building build image: $BUILD_IMAGE" >&2
-    docker build -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
-  fi
-  if ! image_exists "$DEV_IMAGE"; then
-    echo "[gg] building dev image: $DEV_IMAGE" >&2
-    docker build -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
-  fi
+  ensure_image "$BUILD_IMAGE" "docker/Dockerfile.build" "supragoflow-build"
+  ensure_image "$DEV_IMAGE" "docker/Dockerfile.dev" "supragoflow-dev"
 }
 
 run_in_image() {
