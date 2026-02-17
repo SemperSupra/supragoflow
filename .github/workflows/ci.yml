@@ -51,10 +51,4 @@ jobs:
         run: ./scripts/gg build windows amd64
 
       - name: WineBot smoke test
-        run: |
-          set -euo pipefail
-          EXE="dist/windows-amd64/supragoflow.exe"
-          test -f "$EXE"
-          # Run the Windows binary using the WineBot container
-          # The repo root is mounted to /apps inside the container
-          docker run --rm -v $PWD:/apps -w /apps ghcr.io/mark-e-deyoung/winebot:latest-rel-runner wine "/apps/$EXE" --version --json
+        run: ./scripts/gg smoke-windows
