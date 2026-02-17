@@ -1,5 +1,6 @@
 # syntax=docker/dockerfile:1
-FROM debian:trixie-slim
+ARG DEBIAN_BASE=debian:trixie-slim
+FROM ${DEBIAN_BASE}
 
 ARG GO_VERSION=1.25.7
 ARG TARGETARCH

@@ -4,6 +4,18 @@ set -euo pipefail
 ROOT="$(cd "$(dirname "${BASH_SOURCE[0]}")/.." && pwd)"
 WORKDIR="/work"
 
+if [ -f "${ROOT}/.versions" ]; then
+  source "${ROOT}/.versions"
+fi
+
+BUILD_ARGS=(
+  --build-arg GO_VERSION="${GO_VERSION:-1.25.7}"
+  --build-arg GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION:-v1.64.8}"
+  --build-arg GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.4}"
+  --build-arg GOTESTSUM_VERSION="${GOTESTSUM_VERSION:-v1.13.0}"
+  --build-arg DEBIAN_BASE="${DEBIAN_BASE:-debian:trixie-slim}"
+)
+
 DEV_IMAGE="${SUPRAGOFLOW_DEV_IMAGE:-supragoflow-dev:local}"
 BUILD_IMAGE="${SUPRAGOFLOW_BUILD_IMAGE:-supragoflow-build:local}"
 
@@ -39,8 +51,14 @@ ensure_image() {
 
 ensure_images() {
   # Build locally if missing (incremental bring-up friendly)
-  ensure_image "$BUILD_IMAGE" "docker/Dockerfile.build" "supragoflow-build"
-  ensure_image "$DEV_IMAGE" "docker/Dockerfile.dev" "supragoflow-dev"
+  if ! image_exists "$BUILD_IMAGE"; then
+    echo "[gg] building build image: $BUILD_IMAGE" >&2
+    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+  fi
+  if ! image_exists "$DEV_IMAGE"; then
+    echo "[gg] building dev image: $DEV_IMAGE" >&2
+    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+  fi
 }
 
 run_in_image() {
@@ -92,9 +110,9 @@ case "$stage" in
       exit 2
     fi
     echo "[gg] building build image: $BUILD_IMAGE" >&2
-    docker build -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
     echo "[gg] building dev image: $DEV_IMAGE" >&2
-    docker build -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
   *)
     cat <<'USAGE'
