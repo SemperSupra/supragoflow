@@ -18,6 +18,7 @@ BUILD_ARGS=(
 
 DEV_IMAGE="${SUPRAGOFLOW_DEV_IMAGE:-supragoflow-dev:local}"
 BUILD_IMAGE="${SUPRAGOFLOW_BUILD_IMAGE:-supragoflow-build:local}"
+WINEBOT_IMAGE="${SUPRAGOFLOW_WINEBOT_IMAGE:-ghcr.io/mark-e-deyoung/winebot:v0.9.5-rel-runner}"
 
 # Named volumes for speed (safe for humans/agents)
 MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
@@ -114,6 +115,20 @@ case "$stage" in
     echo "[gg] building dev image: $DEV_IMAGE" >&2
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
+  smoke-windows)
+    if in_container; then
+      echo "Refusing to run containerized smoke test from inside a container." >&2
+      exit 2
+    fi
+    EXE="dist/windows-amd64/supragoflow.exe"
+    if [ ! -f "${ROOT}/${EXE}" ]; then
+      echo "Error: ${EXE} not found. Run './scripts/gg build windows amd64' first." >&2
+      exit 1
+    fi
+    # Use direct wine command as per WineBot simplified usage
+    echo "[gg] running windows smoke test in ${WINEBOT_IMAGE}..."
+    docker run --rm -v "${ROOT}:/apps" -w /apps "$WINEBOT_IMAGE" wine "/apps/${EXE}" --version --json
+    ;;
   *)
     cat <<'USAGE'
 usage: gg <stage> [args]
@@ -129,7 +144,8 @@ stages:
   test
   build <goos> <goarch>
   package
-  images   (build local images on host)
+  images        (build local images on host)
+  smoke-windows (run windows binary in winebot container)
 USAGE
     exit 2
     ;;

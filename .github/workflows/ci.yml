@@ -50,17 +50,5 @@ jobs:
       - name: Build windows amd64
         run: ./scripts/gg build windows amd64
 
-      - name: Install Wine
-        run: |
-          sudo dpkg --add-architecture i386
-          sudo apt-get update
-          sudo apt-get install -y --no-install-recommends wine wine64 wine32
-
-      - name: Wine smoke test
-        run: |
-          set -euo pipefail
-          EXE="dist/windows-amd64/supragoflow.exe"
-          test -f "$EXE"
-          wine --version
-          wine "$EXE" --version
-          wine "$EXE" --version --json
+      - name: WineBot smoke test
+        run: ./scripts/gg smoke-windows

@@ -1,6 +1,6 @@
 # STATUS
 
-Last updated: 2026-02-13
+Last updated: 2026-02-17
 
 ## Current State
 
@@ -12,12 +12,13 @@ Last updated: 2026-02-13
 
 - Containerized Go toolchain/build flow fixed and stabilized.
 - `./scripts/gg` lifecycle working for local dev and CI usage.
-- Windows Wine smoke job added in CI.
+- Windows Wine smoke job added in CI (upgraded to WineBot container).
 - Security/tooling policy updates added (proven implementations + Windows/Wine compatibility requirement).
 - New secure comms package added:
   - `internal/securecomms/tls.go`
   - `internal/securecomms/ssh.go`
   - tests for both TLS and SSH config builders
+- WineBot launcher compatibility verified (blocking issue #2 resolved).
 
 ## Validation Snapshot
 
@@ -37,10 +38,6 @@ All passed in the SupraGoFlow environment.
 
 ## Known External Dependency / Blocker
 
-- Pending WineBot-side fix for launcher behavior:
-  - direct CLI execution mode
-  - optional explorer supervision disable for CLI workloads
-
-SupraGoFlow core is not blocked for normal `gg` workflow, but end-to-end WineBot launcher compatibility is blocked pending that WineBot fix.
+None.
 
 For detailed work logs and resume plans, see [docs/work-log.md](docs/work-log.md).
