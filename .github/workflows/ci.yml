@@ -57,5 +57,4 @@ jobs:
           test -f "$EXE"
           # Run the Windows binary using the WineBot container
           # The repo root is mounted to /apps inside the container
-          # Note: run-app.sh is at /scripts/run-app.sh in the container image
-          docker run --rm -v $PWD:/apps -w /apps ghcr.io/mark-e-deyoung/winebot:latest-rel-runner /scripts/run-app.sh "/apps/$EXE" --mode headless --args "--version --json"
+          docker run --rm -v $PWD:/apps -w /apps ghcr.io/mark-e-deyoung/winebot:latest-rel-runner wine "/apps/$EXE" --version --json
