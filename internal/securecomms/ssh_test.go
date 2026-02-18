@@ -104,14 +104,7 @@ func TestNewSSHClientConfigInvalidInput(t *testing.T) {
 		t.Fatalf("generateRSAPrivateKeyPEM: %v", err)
 	}
 
-	// Assuming knownhosts.New fails on garbage input as per original test expectation
-	// Note: knownhosts parser is quite robust, so "not-known-hosts" might just be ignored as a comment or invalid line.
-	// But let's check if the original test relied on it failing.
-	// We'll keep it commented out if we are unsure, or rely on `knownHostsData` check inside NewSSHClientConfig which we added (len==0 check).
-	// But "not-known-hosts" is not empty.
-	// If the original test expected failure, then `knownhosts.New` MUST fail.
-	// Let's re-enable it to be safe and see if tests pass.
-	// However, if "not-known-hosts" is treated as a hostname without key, it's invalid format.
+	// Verify that invalid known_hosts data (e.g. junk string) causes a parser error.
 	if _, err := NewSSHClientConfig("alice", keyPEM, []byte("not-known-hosts")); err == nil {
 		t.Fatal("expected error for invalid known_hosts data")
 	}

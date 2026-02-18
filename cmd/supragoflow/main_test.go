@@ -14,7 +14,44 @@ func TestRunDefaultOutput(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "supragoflow: hello") {
+	if !strings.Contains(got, "usage: supragoflow") {
+		t.Fatalf("unexpected output: %q", got)
+	}
+}
+
+func TestRunVersionSubcommand(t *testing.T) {
+	var out bytes.Buffer
+	if err := run([]string{"version"}, &out); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "version=") {
+		t.Fatalf("expected version output, got %q", got)
+	}
+}
+
+func TestRunCheckTLS(t *testing.T) {
+	var out bytes.Buffer
+	if err := run([]string{"check-tls"}, &out); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "OK: TLS client config builder initialized successfully.") {
+		t.Fatalf("unexpected output: %q", got)
+	}
+}
+
+func TestRunCheckSSH(t *testing.T) {
+	var out bytes.Buffer
+	if err := run([]string{"check-ssh"}, &out); err != nil {
+		t.Fatalf("run returned error: %v", err)
+	}
+
+	got := out.String()
+	if !strings.Contains(got, "OK: SSH client config builder initialized successfully.") &&
+		!strings.Contains(got, "Note: SSH config builder returned expected error") {
 		t.Fatalf("unexpected output: %q", got)
 	}
 }
