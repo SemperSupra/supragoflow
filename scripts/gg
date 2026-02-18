@@ -18,7 +18,7 @@ BUILD_ARGS=(
 
 DEV_IMAGE="${SUPRAGOFLOW_DEV_IMAGE:-supragoflow-dev:local}"
 BUILD_IMAGE="${SUPRAGOFLOW_BUILD_IMAGE:-supragoflow-build:local}"
-WINEBOT_IMAGE="${SUPRAGOFLOW_WINEBOT_IMAGE:-ghcr.io/mark-e-deyoung/winebot:v0.9.5-rel-runner}"
+WINE_IMAGE="ghcr.io/mark-e-deyoung/winebot:v0.9.5-rel-runner"
 
 # Named volumes for speed (safe for humans/agents)
 MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
@@ -32,25 +32,32 @@ image_exists() {
   docker image inspect "$1" >/dev/null 2>&1
 }
 
-ensure_image() {
-  local image="$1"
-  local dockerfile="$2"
-  local repo_name="$3"
+pull_images() {
+  local org="${GHCR_ORG:-SemperSupra}"
+  # convert org to lowercase
+  org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 
-  if ! image_exists "$image"; then
-    local cache_image="ghcr.io/sempersupra/${repo_name}:latest"
-    echo "[gg] image $image not found. Attempting to pull $cache_image..." >&2
-    if docker pull "$cache_image"; then
-      echo "[gg] pulled $cache_image. Building with cache..." >&2
-      docker build --cache-from "$cache_image" -f "${ROOT}/${dockerfile}" -t "$image" "$ROOT"
-    else
-      echo "[gg] pull failed. Building from scratch..." >&2
-      docker build -f "${ROOT}/${dockerfile}" -t "$image" "$ROOT"
+  local build_remote="ghcr.io/$org/supragoflow-build:latest"
+  local dev_remote="ghcr.io/$org/supragoflow-dev:latest"
+
+  if ! image_exists "$BUILD_IMAGE"; then
+    if docker pull "$build_remote" >/dev/null 2>&1; then
+      echo "[gg] pulled build image from $build_remote" >&2
+      docker tag "$build_remote" "$BUILD_IMAGE"
+    fi
+  fi
+
+  if ! image_exists "$DEV_IMAGE"; then
+    if docker pull "$dev_remote" >/dev/null 2>&1; then
+      echo "[gg] pulled dev image from $dev_remote" >&2
+      docker tag "$dev_remote" "$DEV_IMAGE"
     fi
   fi
 }
 
 ensure_images() {
+  pull_images
+
   # Build locally if missing (incremental bring-up friendly)
   if ! image_exists "$BUILD_IMAGE"; then
     echo "[gg] building build image: $BUILD_IMAGE" >&2
@@ -116,18 +123,16 @@ case "$stage" in
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
   smoke-windows)
-    if in_container; then
-      echo "Refusing to run containerized smoke test from inside a container." >&2
-      exit 2
-    fi
-    EXE="dist/windows-amd64/supragoflow.exe"
-    if [ ! -f "${ROOT}/${EXE}" ]; then
-      echo "Error: ${EXE} not found. Run './scripts/gg build windows amd64' first." >&2
+    exe="dist/windows-amd64/supragoflow.exe"
+    if [[ ! -f "$exe" ]]; then
+      echo "binary not found: $exe (run 'gg build windows amd64' first)" >&2
       exit 1
     fi
-    # Use direct wine command as per WineBot simplified usage
-    echo "[gg] running windows smoke test in ${WINEBOT_IMAGE}..."
-    docker run --rm -v "${ROOT}:/apps" -w /apps "$WINEBOT_IMAGE" wine "/apps/${EXE}" --version --json
+    # We must run with direct volume mount and entrypoint
+    docker run --rm \
+      -v "$(pwd)/$exe:/app/supragoflow.exe" \
+      --entrypoint wine \
+      "$WINE_IMAGE" /app/supragoflow.exe --version --json
     ;;
   *)
     cat <<'USAGE'
@@ -144,8 +149,8 @@ stages:
   test
   build <goos> <goarch>
   package
-  images        (build local images on host)
-  smoke-windows (run windows binary in winebot container)
+  images   (build local images on host)
+  smoke-windows
 USAGE
     exit 2
     ;;

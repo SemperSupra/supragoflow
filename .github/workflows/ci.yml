@@ -11,6 +11,8 @@ permissions:
 jobs:
   gates:
     runs-on: ubuntu-latest
+    env:
+      GHCR_ORG: ${{ github.repository_owner }}
     steps:
       - uses: actions/checkout@v4
 
@@ -20,8 +22,15 @@ jobs:
       - name: Dependencies
         run: ./scripts/gg deps
 
+      - name: Tidy
+        run: |
+          ./scripts/gg tidy
+          git diff --exit-code
+
       - name: Format
-        run: ./scripts/gg fmt
+        run: |
+          ./scripts/gg fmt
+          git diff --exit-code
 
       - name: Vet
         run: ./scripts/gg vet
@@ -44,11 +53,13 @@ jobs:
   windows_wine_smoke:
     runs-on: ubuntu-latest
     needs: gates
+    env:
+      GHCR_ORG: ${{ github.repository_owner }}
     steps:
       - uses: actions/checkout@v4
 
       - name: Build windows amd64
         run: ./scripts/gg build windows amd64
 
-      - name: WineBot smoke test
+      - name: Wine smoke test
         run: ./scripts/gg smoke-windows
