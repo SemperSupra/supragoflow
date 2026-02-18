@@ -132,11 +132,33 @@ case "$stage" in
       echo "binary not found: $exe (run 'gg build windows ${goarch}' first)" >&2
       exit 1
     fi
-    # We must run with direct volume mount and entrypoint
+    # Use official WineBot entrypoint with explorer supervision disabled for CLI workloads
+    echo "[gg] running version check (WineBot E2E)..."
     docker run --rm \
-      -v "$(pwd)/$exe:/app/supragoflow.exe" \
-      --entrypoint wine \
-      "$WINE_IMAGE" /app/supragoflow.exe --version --json
+      -v "$(pwd)/$exe:/apps/supragoflow.exe" \
+      -e APP_EXE=/apps/supragoflow.exe \
+      -e APP_ARGS="--version --json" \
+      -e WINEBOT_SUPERVISE_EXPLORER=0 \
+      -e WINEDEBUG=-all \
+      "$WINE_IMAGE"
+
+    echo "[gg] running tls check (WineBot E2E)..."
+    docker run --rm \
+      -v "$(pwd)/$exe:/apps/supragoflow.exe" \
+      -e APP_EXE=/apps/supragoflow.exe \
+      -e APP_ARGS="check-tls" \
+      -e WINEBOT_SUPERVISE_EXPLORER=0 \
+      -e WINEDEBUG=-all \
+      "$WINE_IMAGE"
+
+    echo "[gg] running ssh check (WineBot E2E)..."
+    docker run --rm \
+      -v "$(pwd)/$exe:/apps/supragoflow.exe" \
+      -e APP_EXE=/apps/supragoflow.exe \
+      -e APP_ARGS="check-ssh" \
+      -e WINEBOT_SUPERVISE_EXPLORER=0 \
+      -e WINEDEBUG=-all \
+      "$WINE_IMAGE"
     ;;
   *)
     cat <<'USAGE'

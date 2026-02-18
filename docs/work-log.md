@@ -1,23 +1,16 @@
 # Work Log
 
-## WineBot Integration Status
+## Integration Status
 
 Result:
-- `supragoflow.exe` runs correctly under Wine when executed directly as `winebot` user in WineBot container.
-- WineBot launcher path (`scripts/run-app.sh` headless attached flow) is the problem area for CLI-style EXEs.
+- **Completed:** Arbitrary build target support and WBAB compatibility (PR #8).
+- **Completed:** Secure communications package (`internal/securecomms`) with TLS/SSH defaults.
+- **Completed:** Functional integration of `securecomms` into the CLI (`check-tls`, `check-ssh`).
+- **Resolved:** WineBot launcher path fix verified (Issue #2).
+  - SupraGoFlow now uses official WineBot E2E flow with `WINEBOT_SUPERVISE_EXPLORER=0`.
 
 Artifacts and issue filed:
-- WineBot issue: `https://github.com/mark-e-deyoung/WineBot/issues/2`
-- Repro + logs + patch draft gist: `https://gist.github.com/mark-e-deyoung/c96406c7cfc7ba6c4d99eebe64e51048`
-- Local artifact bundle: `/tmp/winebot-supragoflow-issue`
-
-## Resume Plan (after WineBot check)
-
-1. Pull/check WineBot issue updates and merged fix.
-2. Re-run WineBot validation for SupraGoFlow EXE:
-   - `./scripts/run-app.sh /apps/supragoflow.exe --mode headless --args "--version --json"`
-3. If fixed, capture successful output and update this file.
-4. Optionally add/strengthen SupraGoFlow CI path that validates WineBot launcher compatibility (not just bare Wine).
+- WineBot issue: `https://github.com/mark-e-deyoung/WineBot/issues/2` (Closed/Resolved)
 
 ## Quick Resume Commands
 
