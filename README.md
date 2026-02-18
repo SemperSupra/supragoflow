@@ -47,9 +47,16 @@ Images published on release:
 ./scripts/gg test
 ./scripts/gg build linux amd64
 ./scripts/gg build windows amd64
+./scripts/gg build windows 386
 ```
 
 Outputs land in `dist/<goos>-<goarch>/`.
+
+## WBAB Compatibility
+
+This project is fully compatible with [WineBotAppBuilder (WBAB)](https://github.com/SemperSupra/WineBotAppBuilder) workflows.
+It produces artifacts in the standard `dist/` directory, making it suitable for inclusion in WBAB pipelines for packaging and distribution.
+The `scripts/gg` toolchain adheres to containerized build principles, ensuring deterministic outputs across environments.
 
 ## Development Commands
 
@@ -65,9 +72,11 @@ The `./scripts/gg` entrypoint supports the following stages:
 | `lint` | Run linter (`golangci-lint`) |
 | `vuln` | Run vulnerability check (`govulncheck`) |
 | `test` | Run tests |
+| `targets` | List supported build targets |
 | `build <goos> <goarch>` | Build binary for target OS/Arch |
 | `package` | Package artifacts (create checksums) |
 | `images` | Build local Docker images |
+| `smoke-windows [goarch]` | Run Windows binary in Wine (default: amd64) |
 
 ## VS Code Dev Container
 

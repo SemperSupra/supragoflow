@@ -122,10 +122,14 @@ case "$stage" in
     echo "[gg] building dev image: $DEV_IMAGE" >&2
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
+  targets)
+    run "$DEV_IMAGE" 'go tool dist list'
+    ;;
   smoke-windows)
-    exe="dist/windows-amd64/supragoflow.exe"
+    goarch="${1:-amd64}"
+    exe="dist/windows-${goarch}/supragoflow.exe"
     if [[ ! -f "$exe" ]]; then
-      echo "binary not found: $exe (run 'gg build windows amd64' first)" >&2
+      echo "binary not found: $exe (run 'gg build windows ${goarch}' first)" >&2
       exit 1
     fi
     # We must run with direct volume mount and entrypoint
@@ -147,10 +151,11 @@ stages:
   lint
   vuln
   test
+  targets
   build <goos> <goarch>
   package
   images   (build local images on host)
-  smoke-windows
+  smoke-windows [goarch]
 USAGE
     exit 2
     ;;
