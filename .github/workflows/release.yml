@@ -27,6 +27,10 @@ jobs:
           username: ${{ github.actor }}
           password: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Prepare GHCR Org Name
+        run: |
+          echo "GHCR_ORG=$(echo "${{ github.repository_owner }}" | tr '[:upper:]' '[:lower:]')" >> $GITHUB_ENV
+
       - name: Load versions
         run: |
           cat .versions >> $GITHUB_ENV
@@ -42,8 +46,8 @@ jobs:
             GO_VERSION=${{ env.GO_VERSION }}
             DEBIAN_BASE=${{ env.DEBIAN_BASE }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/supragoflow-build:${{ github.event.release.tag_name }}
-            ghcr.io/${{ github.repository_owner }}/supragoflow-build:latest
+            ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${{ github.event.release.tag_name }}
+            ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:latest
 
       - name: Build & push dev image
         uses: docker/build-push-action@v6
@@ -59,5 +63,5 @@ jobs:
             GOTESTSUM_VERSION=${{ env.GOTESTSUM_VERSION }}
             DEBIAN_BASE=${{ env.DEBIAN_BASE }}
           tags: |
-            ghcr.io/${{ github.repository_owner }}/supragoflow-dev:${{ github.event.release.tag_name }}
-            ghcr.io/${{ github.repository_owner }}/supragoflow-dev:latest
+            ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${{ github.event.release.tag_name }}
+            ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:latest
