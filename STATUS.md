@@ -5,8 +5,8 @@ Last updated: 2026-02-18
 ## Current State
 
 - Branch: `main`
-- Git status: local changes (CLI integration + WineBot E2E)
-- Latest merged commit: `46cd494` (`Merge pull request #8`)
+- Git status: clean (`v0.0.1` tagged and released)
+- Latest release: `v0.0.1` (Initial release)
 
 ## Completed Work
 
@@ -18,24 +18,19 @@ Last updated: 2026-02-18
   - `internal/securecomms/tls.go`
   - `internal/securecomms/ssh.go`
   - subcommands: `check-tls`, `check-ssh` for cross-platform validation.
+- **First Release (v0.0.1):** GHCR image publishing fixed and verified.
 
 ## Validation Snapshot
 
-Verified locally (containerized):
+Verified locally & in CI:
 
-- `./scripts/gg fmt`
-- `./scripts/gg vet`
-- `./scripts/gg lint`
-- `./scripts/gg vuln`
-- `./scripts/gg test`
-- `./scripts/gg build linux amd64`
-- `./scripts/gg build windows amd64`
-- `./scripts/gg smoke-windows` (WineBot E2E flow)
-
-All passed in the SupraGoFlow environment.
+- `./scripts/gg fmt`, `gg vet`, `gg lint`, `gg vuln`, `gg test` (Passed)
+- `./scripts/gg build linux amd64`, `gg build windows amd64` (Passed)
+- `./scripts/gg smoke-windows` (WineBot E2E flow verified)
+- GHCR Images: `supragoflow-build`, `supragoflow-dev` (Published v0.0.1/latest)
 
 ## Known External Dependency / Blocker
 
-- None (WineBot Issue #2 resolved).
+- None.
 
 For detailed work logs and resume plans, see [docs/work-log.md](docs/work-log.md).

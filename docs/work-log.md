@@ -6,6 +6,7 @@ Result:
 - **Completed:** Arbitrary build target support and WBAB compatibility (PR #8).
 - **Completed:** Secure communications package (`internal/securecomms`) with TLS/SSH defaults.
 - **Completed:** Functional integration of `securecomms` into the CLI (`check-tls`, `check-ssh`).
+- **Completed:** Initial Release `v0.0.1` (GHCR images published).
 - **Resolved:** WineBot launcher path fix verified (Issue #2).
   - SupraGoFlow now uses official WineBot E2E flow with `WINEBOT_SUPERVISE_EXPLORER=0`.
 
