@@ -123,6 +123,9 @@ jobs:
             "ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev@${{ steps.dev_image_tmp.outputs.digest }}"
 
       - name: Build release binaries for SBOM
+        env:
+          SUPRAGOFLOW_CACHE_STRATEGY: host
+          SUPRAGOFLOW_HOST_CACHE_ROOT: ${{ runner.temp }}/supragoflow-cache
         run: |
           SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build linux amd64
           SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build windows amd64
