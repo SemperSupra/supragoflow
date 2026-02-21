@@ -480,6 +480,40 @@ case "$stage" in
       log_msg info "host cache within limit size=${size_kb}KB limit=${max_kb}KB"
     fi
     ;;
+  diagnose)
+    out_dir="${1:-dist/diagnostics/${RUN_ID}}"
+    if ! mkdir -p "${out_dir}" 2>/dev/null; then
+      fallback_dir="/tmp/supragoflow-diagnostics/${RUN_ID}"
+      log_msg warn "diagnose output path not writable: ${out_dir}; using ${fallback_dir}"
+      out_dir="${fallback_dir}"
+      mkdir -p "${out_dir}"
+    fi
+
+    {
+      echo "run_id=${RUN_ID}"
+      echo "generated_at=$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+      echo "root=${ROOT}"
+      echo "log_level=${LOG_LEVEL}"
+      echo "log_format=${LOG_FORMAT}"
+      echo "cache_strategy=${CACHE_STRATEGY}"
+    } > "${out_dir}/summary.txt"
+
+    (env | grep -E '^(SUPRAGOFLOW_|GHCR_|GITHUB_)' | sort) > "${out_dir}/env.txt" 2>/dev/null || true
+    (git -C "${ROOT}" status -sb) > "${out_dir}/git-status.txt" 2>/dev/null || true
+    (git -C "${ROOT}" log --oneline -n 10) > "${out_dir}/git-log.txt" 2>/dev/null || true
+    (cat "${ROOT}/.versions") > "${out_dir}/toolchain-versions.txt" 2>/dev/null || true
+    (du -sh "${ROOT}/dist" "${HOST_CACHE_ROOT}" 2>/dev/null || true) > "${out_dir}/sizes.txt" 2>/dev/null || true
+    (./scripts/gg --log-level error --log-format text self-test) > "${out_dir}/self-test.txt" 2>&1 || true
+
+    if command -v docker >/dev/null 2>&1; then
+      run_with_timeout 20 "diagnose docker images" docker image ls > "${out_dir}/docker-images.txt" 2>&1 || true
+      run_with_timeout 20 "diagnose docker system df" docker system df > "${out_dir}/docker-system-df.txt" 2>&1 || true
+    fi
+
+    tarball="${out_dir}.tar.gz"
+    tar -czf "${tarball}" -C "$(dirname "${out_dir}")" "$(basename "${out_dir}")"
+    log_msg info "diagnostics bundle written: ${tarball}"
+    ;;
   targets)
     run "$DEV_IMAGE" 'go tool dist list'
     ;;
@@ -547,6 +581,7 @@ stages:
   package
   images   (build local images on host)
   cache-prune (prune host cache when above SUPRAGOFLOW_HOST_CACHE_MAX_MB)
+  diagnose [out_dir] (write bounded diagnostics bundle and .tar.gz)
   smoke-windows [goarch]
 
 build output template tokens:
