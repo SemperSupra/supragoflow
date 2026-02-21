@@ -83,6 +83,7 @@ The `./scripts/gg` entrypoint supports the following stages:
 | `build <goos> <goarch> [--output-template <template>]` | Build binary for target OS/Arch |
 | `package` | Package artifacts (create checksums) |
 | `images` | Build local Docker images |
+| `cache-prune` | Prune host cache when above configured limit |
 | `smoke-windows [goarch]` | Run Windows binary in Wine (default: amd64) |
 
 Global `gg` logging options (place before stage): `--log-level <debug|info|warn|error|none>`, `--log-format <text|json>`, `--run-id <id>`.
@@ -147,6 +148,12 @@ This repo is public, but Issues/PRs are **invite-only by behavior**:
 - Agents are supported via a whitelist of GitHub usernames (bot identities).
 
 See `CONTRIBUTING.md` and `.github/allowlist.yml`.
+
+## Security
+
+- Security contact and disclosure process: see [SECURITY.md](SECURITY.md).
+- CI includes repository secret scanning and pinned GitHub Actions references.
+- Release workflow publishes SBOM assets for release images and binaries.
 
 ## Documentation Index
 

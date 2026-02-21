@@ -19,9 +19,9 @@ jobs:
       SUPRAGOFLOW_DEV_IMAGE_REF: ${{ vars.SUPRAGOFLOW_DEV_IMAGE_REF }}
       SUPRAGOFLOW_CACHE_STRATEGY: host
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
       - name: Restore Go build/module cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .cache/supragoflow/gocache
@@ -29,6 +29,11 @@ jobs:
           key: gg-cache-${{ runner.os }}-${{ hashFiles('**/go.sum', '.versions', 'docker/Dockerfile.build', 'docker/Dockerfile.dev') }}
           restore-keys: |
             gg-cache-${{ runner.os }}-
+
+      - name: Secret scan
+        uses: gitleaks/gitleaks-action@ff98106e4c7b2bc287b24eaf42907196329070c7 # v2
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Validate output template rendering
         run: ./scripts/test-output-template.sh
@@ -71,7 +76,7 @@ jobs:
 
       - name: Upload windows artifact for smoke test (main only)
         if: github.event_name == 'push' && github.ref == 'refs/heads/main'
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
         with:
           name: supragoflow-windows-amd64
           path: dist/windows-amd64/supragoflow.exe
@@ -94,10 +99,10 @@ jobs:
       SUPRAGOFLOW_CACHE_STRATEGY: host
       SUPRAGOFLOW_WINE_RUNNER_IMAGE: ${{ vars.SUPRAGOFLOW_WINE_RUNNER_IMAGE }}
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Restore Go build/module cache
-        uses: actions/cache@v4
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
           path: |
             .cache/supragoflow/gocache
@@ -111,7 +116,7 @@ jobs:
           test -n "${SUPRAGOFLOW_WINE_RUNNER_IMAGE}" || (echo "Set repository variable SUPRAGOFLOW_WINE_RUNNER_IMAGE to a canonical Wine runner image." >&2; exit 2)
 
       - name: Download windows artifact
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@d3f86a106a0bac45b974a628896c90dbdf5c8093 # v4
         with:
           name: supragoflow-windows-amd64
           path: dist/windows-amd64

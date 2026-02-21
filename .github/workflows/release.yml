@@ -5,24 +5,28 @@ on:
     types: [published]
 
 permissions:
-  contents: read
+  contents: write
   packages: write
 
 jobs:
   publish:
     runs-on: ubuntu-latest
     timeout-minutes: 45
+    environment: release
+    concurrency:
+      group: release-${{ github.event.release.tag_name }}
+      cancel-in-progress: false
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
       - name: Set up QEMU
-        uses: docker/setup-qemu-action@v3
+        uses: docker/setup-qemu-action@c7c53464625b32c7a7e944ae62b3e17d2b600130 # v3
 
       - name: Set up Buildx
-        uses: docker/setup-buildx-action@v3
+        uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3
 
       - name: Login to GHCR
-        uses: docker/login-action@v3
+        uses: docker/login-action@c94ce9fb468520275223c153574b00df6fe4bcc9 # v3
         with:
           registry: ghcr.io
           username: ${{ github.actor }}
@@ -37,7 +41,7 @@ jobs:
           cat .versions >> $GITHUB_ENV
 
       - name: Build & push build image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/Dockerfile.build
@@ -50,7 +54,7 @@ jobs:
             ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${{ github.event.release.tag_name }}
 
       - name: Build & push dev image
-        uses: docker/build-push-action@v6
+        uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/Dockerfile.dev
@@ -64,3 +68,46 @@ jobs:
             DEBIAN_BASE=${{ env.DEBIAN_BASE }}
           tags: |
             ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${{ github.event.release.tag_name }}
+
+      - name: Build release binaries for SBOM
+        run: |
+          SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build linux amd64
+          SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build windows amd64
+
+      - name: Generate SBOM (build image)
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
+        with:
+          image: ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${{ github.event.release.tag_name }}
+          format: spdx-json
+          output-file: sbom-supragoflow-build-image.spdx.json
+
+      - name: Generate SBOM (dev image)
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
+        with:
+          image: ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${{ github.event.release.tag_name }}
+          format: spdx-json
+          output-file: sbom-supragoflow-dev-image.spdx.json
+
+      - name: Generate SBOM (linux binary)
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
+        with:
+          path: dist/linux-amd64/supragoflow
+          format: spdx-json
+          output-file: sbom-supragoflow-linux-amd64.spdx.json
+
+      - name: Generate SBOM (windows binary)
+        uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
+        with:
+          path: dist/windows-amd64/supragoflow.exe
+          format: spdx-json
+          output-file: sbom-supragoflow-windows-amd64.spdx.json
+
+      - name: Upload SBOM assets to release
+        uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
+        with:
+          tag_name: ${{ github.event.release.tag_name }}
+          files: |
+            sbom-supragoflow-build-image.spdx.json
+            sbom-supragoflow-dev-image.spdx.json
+            sbom-supragoflow-linux-amd64.spdx.json
+            sbom-supragoflow-windows-amd64.spdx.json
