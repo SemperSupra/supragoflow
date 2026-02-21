@@ -94,9 +94,12 @@ Liveness heartbeat interval for long operations is configurable via `SUPRAGOFLOW
 Cache behavior is configurable via `SUPRAGOFLOW_CACHE_STRATEGY`:
 - `volume` (default): Docker named volumes for local iterative runs
 - `host`: bind mounts under `SUPRAGOFLOW_HOST_CACHE_ROOT` (default `.cache/supragoflow`) for CI cache restore/save compatibility
+Host cache can be bounded with `SUPRAGOFLOW_HOST_CACHE_MAX_MB` and pruned via `./scripts/gg cache-prune`.
 
 `smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
-To enable pull-first CI image reuse from GHCR release images, set repository variable `SUPRAGOFLOW_IMAGE_TAG` to a canonical release tag.
+To enable pull-first CI image reuse from GHCR release images, set one of:
+- `SUPRAGOFLOW_BUILD_IMAGE_REF` / `SUPRAGOFLOW_DEV_IMAGE_REF` (preferred; supports digest-pinned refs)
+- `SUPRAGOFLOW_IMAGE_TAG` (tag-based fallback)
 
 `build` supports semantic artifact naming templates with tokens: `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.
 For reproducible metadata, `SUPRAGOFLOW_BUILD_DATE` can be set to a fixed RFC3339 UTC timestamp used for embedded build date.

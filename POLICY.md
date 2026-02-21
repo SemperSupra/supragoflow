@@ -47,6 +47,7 @@ Typical gates for incremental development:
 - Timeouts and pull retry/backoff are configurable to bound long-running operations (`SUPRAGOFLOW_TIMEOUT_*`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`).
 - Long-running operations provide liveness/progress feedback with configurable heartbeat interval (`SUPRAGOFLOW_HEARTBEAT_SEC`).
 - Cache strategy is configurable (`SUPRAGOFLOW_CACHE_STRATEGY=volume|host`); CI should prefer `host` to enable cache restore/save across runs.
+- Host cache should be size-bounded in automation (`SUPRAGOFLOW_HOST_CACHE_MAX_MB`) and pruned with `gg cache-prune`.
 
 ## Builds (build image)
 
@@ -80,9 +81,16 @@ Typical gates for incremental development:
 - Container images are built and pushed to GHCR **only** on GitHub Release (`release.published`).
 - Release workflows publish explicit release tags only; `:latest` is not part of the canonical path.
 - Users/agents should prefer GHCR release tags over local images.
-- `scripts/gg` only attempts remote pulls when `SUPRAGOFLOW_IMAGE_TAG` is set.
+- `scripts/gg` supports pull-first image reuse via explicit refs:
+  - Preferred: `SUPRAGOFLOW_BUILD_IMAGE_REF` and `SUPRAGOFLOW_DEV_IMAGE_REF` (digest pinning supported).
+  - Fallback: `SUPRAGOFLOW_IMAGE_TAG`.
 - CI may set repository variable `SUPRAGOFLOW_IMAGE_TAG` to a canonical release tag to enable pull-first image reuse before local fallback build.
 - `gg smoke-windows` requires an explicit runner image via `SUPRAGOFLOW_WINE_RUNNER_IMAGE`.
+
+## CI tiering
+
+- Pull requests run a fast gate by default (format/vet/lint/test/linux build).
+- Full gate (including vulnerability scan and Wine-based Windows smoke) runs on `main` pushes.
 
 ## Service discoverability
 

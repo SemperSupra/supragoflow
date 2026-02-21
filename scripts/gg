@@ -36,6 +36,8 @@ BUILD_ARGS=(
 DEV_IMAGE="${SUPRAGOFLOW_DEV_IMAGE:-supragoflow-dev:local}"
 BUILD_IMAGE="${SUPRAGOFLOW_BUILD_IMAGE:-supragoflow-build:local}"
 IMAGE_TAG="${SUPRAGOFLOW_IMAGE_TAG:-}"
+BUILD_IMAGE_REF="${SUPRAGOFLOW_BUILD_IMAGE_REF:-}"
+DEV_IMAGE_REF="${SUPRAGOFLOW_DEV_IMAGE_REF:-}"
 WINE_IMAGE="${SUPRAGOFLOW_WINE_RUNNER_IMAGE:-}"
 DEFAULT_OUTPUT_TEMPLATE="${SUPRAGOFLOW_OUTPUT_TEMPLATE:-}"
 DEFAULT_BUILD_VERSION="${SUPRAGOFLOW_BUILD_VERSION:-dev-local}"
@@ -286,21 +288,27 @@ image_exists() {
 pull_images() {
   local org="${GHCR_ORG:-SemperSupra}"
   local tag="${IMAGE_TAG}"
+  local build_remote="${BUILD_IMAGE_REF}"
+  local dev_remote="${DEV_IMAGE_REF}"
   # convert org to lowercase
   org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 
-  if [[ -z "$tag" ]]; then
+  if [[ -z "$build_remote" && -z "$dev_remote" && -z "$tag" ]]; then
     if [[ "$REMOTE_PULL_DISABLED_NOTIFIED" -eq 0 ]]; then
-      log_msg debug "remote image pull disabled (set SUPRAGOFLOW_IMAGE_TAG to a release tag to enable)"
+      log_msg debug "remote image pull disabled (set SUPRAGOFLOW_BUILD_IMAGE_REF/SUPRAGOFLOW_DEV_IMAGE_REF or SUPRAGOFLOW_IMAGE_TAG)"
       REMOTE_PULL_DISABLED_NOTIFIED=1
     fi
     return
   fi
 
-  local build_remote="ghcr.io/$org/supragoflow-build:$tag"
-  local dev_remote="ghcr.io/$org/supragoflow-dev:$tag"
+  if [[ -z "$build_remote" && -n "$tag" ]]; then
+    build_remote="ghcr.io/$org/supragoflow-build:$tag"
+  fi
+  if [[ -z "$dev_remote" && -n "$tag" ]]; then
+    dev_remote="ghcr.io/$org/supragoflow-dev:$tag"
+  fi
 
-  if ! image_exists "$BUILD_IMAGE"; then
+  if [[ -n "$build_remote" ]] && ! image_exists "$BUILD_IMAGE"; then
     if docker_pull_with_retry "$build_remote"; then
       log_msg info "pulled build image from $build_remote"
       docker tag "$build_remote" "$BUILD_IMAGE"
@@ -309,7 +317,7 @@ pull_images() {
     fi
   fi
 
-  if ! image_exists "$DEV_IMAGE"; then
+  if [[ -n "$dev_remote" ]] && ! image_exists "$DEV_IMAGE"; then
     if docker_pull_with_retry "$dev_remote"; then
       log_msg info "pulled dev image from $dev_remote"
       docker tag "$dev_remote" "$DEV_IMAGE"
@@ -450,6 +458,28 @@ case "$stage" in
     log_msg info "building dev image: $DEV_IMAGE"
     docker_build_with_verbosity "$TIMEOUT_IMAGE_BUILD_SEC" "docker build ${DEV_IMAGE}" "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
+  cache-prune)
+    if [[ "$CACHE_STRATEGY" != "host" ]]; then
+      log_msg info "cache-prune skipped (SUPRAGOFLOW_CACHE_STRATEGY=${CACHE_STRATEGY}; host required)"
+      exit 0
+    fi
+    max_mb="${SUPRAGOFLOW_HOST_CACHE_MAX_MB:-2048}"
+    if ! [[ "$max_mb" =~ ^[0-9]+$ ]] || [[ "$max_mb" -le 0 ]]; then
+      echo "SUPRAGOFLOW_HOST_CACHE_MAX_MB must be a positive integer" >&2
+      exit 2
+    fi
+    mkdir -p "${HOST_CACHE_ROOT}/gocache" "${HOST_CACHE_ROOT}/gomodcache"
+    size_kb="$(du -sk "${HOST_CACHE_ROOT}" | awk '{print $1}')"
+    max_kb=$((max_mb * 1024))
+    if (( size_kb > max_kb )); then
+      log_msg warn "pruning host cache at ${HOST_CACHE_ROOT} size=${size_kb}KB limit=${max_kb}KB"
+      rm -rf "${HOST_CACHE_ROOT}/gocache" "${HOST_CACHE_ROOT}/gomodcache"
+      mkdir -p "${HOST_CACHE_ROOT}/gocache" "${HOST_CACHE_ROOT}/gomodcache"
+      log_msg info "host cache prune completed"
+    else
+      log_msg info "host cache within limit size=${size_kb}KB limit=${max_kb}KB"
+    fi
+    ;;
   targets)
     run "$DEV_IMAGE" 'go tool dist list'
     ;;
@@ -516,6 +546,7 @@ stages:
   build <goos> <goarch> [--output-template <template>] [--print-output-name]
   package
   images   (build local images on host)
+  cache-prune (prune host cache when above SUPRAGOFLOW_HOST_CACHE_MAX_MB)
   smoke-windows [goarch]
 
 build output template tokens:
