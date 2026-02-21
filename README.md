@@ -37,6 +37,7 @@ Images published on release:
 - `ghcr.io/<org>/supragoflow-dev:<tag>`
 
 > Containers are built and pushed **only on GitHub Releases** and only as explicit release tags (no implicit `:latest` flow).
+> Release tags are immutable by default; conflicting digest republishes fail unless explicit emergency override is set in release workflow policy.
 > To pull release images in `gg`, set `SUPRAGOFLOW_IMAGE_TAG=<release-tag>`.
 
 ## Two images
