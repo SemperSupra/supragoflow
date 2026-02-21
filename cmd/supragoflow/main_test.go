@@ -50,9 +50,19 @@ func TestRunCheckSSH(t *testing.T) {
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "OK: SSH client config builder initialized successfully.") &&
-		!strings.Contains(got, "Note: SSH config builder returned expected error") {
+	if !strings.Contains(got, "OK: SSH client config builder initialized successfully.") {
 		t.Fatalf("unexpected output: %q", got)
+	}
+}
+
+func TestRunUnknownSubcommand(t *testing.T) {
+	var out bytes.Buffer
+	err := run([]string{"unknown-subcommand"}, &out)
+	if err == nil {
+		t.Fatal("expected error for unknown subcommand")
+	}
+	if !strings.Contains(err.Error(), "unknown subcommand") {
+		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
