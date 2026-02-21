@@ -66,6 +66,13 @@ func handleVersion(args []string, out io.Writer) error {
 	}
 
 	if asJSON {
+		if expected := os.Getenv("SUPRAGOFLOW_EXPECT_SCHEMA_VERSION"); expected != "" && expected != version.SchemaVersion {
+			return fmt.Errorf(
+				"schema compatibility mismatch: expected schemaVersion=%s actual=%s; update consumer expectations or binary version",
+				expected,
+				version.SchemaVersion,
+			)
+		}
 		enc := json.NewEncoder(out)
 		enc.SetIndent("", "  ")
 		return enc.Encode(version.Info())

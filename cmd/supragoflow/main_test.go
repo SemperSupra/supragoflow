@@ -171,3 +171,23 @@ func TestRunVersionJSON(t *testing.T) {
 		t.Fatalf("unexpected schemaVersion %q", payload["schemaVersion"])
 	}
 }
+
+func TestRunVersionJSONSchemaExpectationMatch(t *testing.T) {
+	t.Setenv("SUPRAGOFLOW_EXPECT_SCHEMA_VERSION", "1")
+	var out bytes.Buffer
+	if err := run([]string{"--version", "--json"}, &out); err != nil {
+		t.Fatalf("run returned error with matching schema expectation: %v", err)
+	}
+}
+
+func TestRunVersionJSONSchemaExpectationMismatch(t *testing.T) {
+	t.Setenv("SUPRAGOFLOW_EXPECT_SCHEMA_VERSION", "999")
+	var out bytes.Buffer
+	err := run([]string{"--version", "--json"}, &out)
+	if err == nil {
+		t.Fatal("expected error for schema mismatch")
+	}
+	if !strings.Contains(err.Error(), "schema compatibility mismatch") {
+		t.Fatalf("unexpected error: %v", err)
+	}
+}

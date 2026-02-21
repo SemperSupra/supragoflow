@@ -20,6 +20,15 @@ jobs:
       SUPRAGOFLOW_CACHE_STRATEGY: host
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+      - name: Policy conformance
+        run: ./scripts/check-policy-conformance.sh
+
+      - name: Validate stored config
+        run: ./scripts/gg validate-config
+
+      - name: Verify writable roots (pre-build)
+        run: ./scripts/gg verify-writable
+
       - name: Restore Go build/module cache
         uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
         with:
@@ -86,6 +95,10 @@ jobs:
         if: always()
         run: ./scripts/gg cache-prune
 
+      - name: Verify writable roots (post-build)
+        if: always()
+        run: ./scripts/gg verify-writable
+
   windows_wine_smoke:
     if: github.event_name == 'push' && github.ref == 'refs/heads/main'
     runs-on: ubuntu-latest
@@ -127,3 +140,7 @@ jobs:
       - name: Prune host cache to configured limit
         if: always()
         run: ./scripts/gg cache-prune
+
+      - name: Verify writable roots (post-smoke)
+        if: always()
+        run: ./scripts/gg verify-writable
