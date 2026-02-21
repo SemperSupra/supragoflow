@@ -28,6 +28,7 @@ IMAGE_TAG="${SUPRAGOFLOW_IMAGE_TAG:-}"
 WINE_IMAGE="${SUPRAGOFLOW_WINE_RUNNER_IMAGE:-}"
 DEFAULT_OUTPUT_TEMPLATE="${SUPRAGOFLOW_OUTPUT_TEMPLATE:-}"
 DEFAULT_BUILD_VERSION="${SUPRAGOFLOW_BUILD_VERSION:-dev-local}"
+DEFAULT_BUILD_DATE="${SUPRAGOFLOW_BUILD_DATE:-}"
 if [[ -z "$DEFAULT_OUTPUT_TEMPLATE" ]]; then
   DEFAULT_OUTPUT_TEMPLATE='{name}{ext}'
 fi
@@ -269,8 +270,12 @@ case "$stage" in
     ext=""
     output_template="$DEFAULT_OUTPUT_TEMPLATE"
     build_version="$DEFAULT_BUILD_VERSION"
+    build_date="$DEFAULT_BUILD_DATE"
     print_output_name=0
     if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
+    if [[ -z "$build_date" ]]; then
+      build_date="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+    fi
 
     while [[ $# -gt 0 ]]; do
       case "$1" in
@@ -300,7 +305,7 @@ case "$stage" in
     fi
     out="dist/${goos}-${goarch}"
     # Embed simple version info for local builds
-    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=${build_version} -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${artifact_name} ./cmd/supragoflow"
+    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=${build_version} -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=${build_date} -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${artifact_name} ./cmd/supragoflow"
     ;;
   package)
     run "$BUILD_IMAGE" "mkdir -p dist && cd dist && (command -v sha256sum >/dev/null && sha256sum -b */* > SHA256SUMS || true)"

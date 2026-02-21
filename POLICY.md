@@ -52,6 +52,7 @@ Typical gates for incremental development:
 - `-trimpath`
 - `CGO_ENABLED=0` by default
 - Optional semantic naming via `--output-template` with tokens `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.
+- Reproducible build metadata is supported via `SUPRAGOFLOW_BUILD_DATE` (fixed RFC3339 UTC timestamp).
 
 ## Machine-readable output compatibility
 

@@ -1,7 +1,11 @@
 package main
 
 import (
+	"crypto/rand"
+	"crypto/rsa"
+	"crypto/x509"
 	"encoding/json"
+	"encoding/pem"
 	"flag"
 	"fmt"
 	"io"
@@ -9,6 +13,7 @@ import (
 
 	"github.com/SemperSupra/supragoflow/internal/securecomms"
 	"github.com/SemperSupra/supragoflow/internal/version"
+	"golang.org/x/crypto/ssh"
 )
 
 func main() {
@@ -39,8 +44,7 @@ func run(args []string, out io.Writer) error {
 	case "check-ssh":
 		return handleCheckSSH(subArgs, out)
 	default:
-		// Fallback for flag-style version check if it's not the first arg (less common)
-		return handleVersion(args, out)
+		return fmt.Errorf("unknown subcommand: %s", subcommand)
 	}
 }
 
@@ -85,19 +89,37 @@ func handleCheckTLS(args []string, out io.Writer) error {
 
 func handleCheckSSH(args []string, out io.Writer) error {
 	_, _ = fmt.Fprintln(out, "Checking SSH configuration builder...")
-	// We need a dummy private key and known_hosts entry
-	// This is just to exercise the code path on the target OS (especially Wine).
-	// Using a real-looking but dummy RSA key.
-	dummyKey := []byte("-----BEGIN RSA PRIVATE KEY-----\nMIIEpAIBAAKCAQEA759I9... (dummy)\n-----END RSA PRIVATE KEY-----")
-	// The SSH builder validates the key format, so this will likely fail parsing.
-	// That's acceptable for a basic initialization check, but a real key would be better.
-	// For now, let's just confirm the code paths are reachable.
-	_, err := securecomms.NewSSHClientConfig("user", dummyKey, []byte("example.com ssh-rsa AAAAB3..."))
+	privateKeyPEM, knownHostsData, err := generateSmokeSSHMaterial()
 	if err != nil {
-		// We expect a parsing error, but not a system crash or library missing error.
-		_, _ = fmt.Fprintf(out, "Note: SSH config builder returned expected error (due to dummy data): %v\n", err)
-		return nil
+		return fmt.Errorf("failed to generate SSH smoke material: %w", err)
+	}
+	_, err = securecomms.NewSSHClientConfig("user", privateKeyPEM, knownHostsData)
+	if err != nil {
+		return fmt.Errorf("SSH client config failed: %w", err)
 	}
 	_, _ = fmt.Fprintln(out, "OK: SSH client config builder initialized successfully.")
 	return nil
+}
+
+func generateSmokeSSHMaterial() ([]byte, []byte, error) {
+	userKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, nil, fmt.Errorf("generate user key: %w", err)
+	}
+	userKeyPEM := pem.EncodeToMemory(&pem.Block{
+		Type:  "RSA PRIVATE KEY",
+		Bytes: x509.MarshalPKCS1PrivateKey(userKey),
+	})
+
+	hostKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		return nil, nil, fmt.Errorf("generate host key: %w", err)
+	}
+	hostSigner, err := ssh.NewSignerFromKey(hostKey)
+	if err != nil {
+		return nil, nil, fmt.Errorf("host signer: %w", err)
+	}
+	knownHosts := []byte("example.com " + string(ssh.MarshalAuthorizedKey(hostSigner.PublicKey())))
+
+	return userKeyPEM, knownHosts, nil
 }

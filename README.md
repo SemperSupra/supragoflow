@@ -91,6 +91,7 @@ When `--log-format json` is used, logs include `logSchemaVersion` and `run_id` f
 `smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
 
 `build` supports semantic artifact naming templates with tokens: `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.
+For reproducible metadata, `SUPRAGOFLOW_BUILD_DATE` can be set to a fixed RFC3339 UTC timestamp used for embedded build date.
 Example:
 
 ```bash
