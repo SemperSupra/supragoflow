@@ -63,6 +63,8 @@ Typical gates for incremental development:
 
 - `supragoflow --version --json` includes `schemaVersion`.
 - Consumers should treat `schemaVersion` changes as contract changes requiring compatibility review.
+- `gg contract` publishes the machine-readable lifecycle interface contract (`contracts/gg-interface.json`).
+- Strict fail-fast compatibility checks are supported via `SUPRAGOFLOW_EXPECT_SCHEMA_VERSION`, `SUPRAGOFLOW_EXPECT_LOG_SCHEMA_VERSION`, and `SUPRAGOFLOW_EXPECT_GG_INTERFACE_VERSION`.
 
 ## Security library/framework selection
 
@@ -94,6 +96,8 @@ Typical gates for incremental development:
 - Full gate (including vulnerability scan and Wine-based Windows smoke) runs on `main` pushes.
 - CI includes repository secret scanning.
 - All GitHub Actions must be pinned to immutable commit SHAs.
+- CI includes policy conformance checks (`scripts/check-policy-conformance.sh`).
+- CI should validate stored configuration and writable artifact roots before/after containerized stages (`gg validate-config`, `gg verify-writable`).
 
 ## Release security
 

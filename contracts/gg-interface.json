@@ -1,0 +1,35 @@
+{
+  "interfaceVersion": "1",
+  "logSchemaVersion": "1",
+  "versionSchemaVersion": "1",
+  "globalOptions": [
+    "--log-level",
+    "--log-format",
+    "--run-id"
+  ],
+  "stages": [
+    "bootstrap",
+    "deps",
+    "tidy",
+    "fmt",
+    "vet",
+    "lint",
+    "vuln",
+    "self-test",
+    "test",
+    "contract",
+    "validate-config",
+    "verify-writable",
+    "targets",
+    "build",
+    "package",
+    "images",
+    "cache-prune",
+    "diagnose",
+    "smoke-windows"
+  ],
+  "machineOutputs": [
+    "supragoflow --version --json",
+    "gg --log-format json"
+  ]
+}

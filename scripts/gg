@@ -12,6 +12,7 @@ LOG_LEVEL="${SUPRAGOFLOW_LOG_LEVEL:-info}"
 LOG_FORMAT="${SUPRAGOFLOW_LOG_FORMAT:-text}"
 RUN_ID="${SUPRAGOFLOW_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 REMOTE_PULL_DISABLED_NOTIFIED=0
+GG_INTERFACE_VERSION="1"
 LOG_SCHEMA_VERSION="1"
 PULL_RETRIES="${SUPRAGOFLOW_PULL_RETRIES:-3}"
 PULL_BACKOFF_SEC="${SUPRAGOFLOW_PULL_BACKOFF_SEC:-2}"
@@ -51,6 +52,7 @@ MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
 CACHEVOL="${SUPRAGOFLOW_CACHEVOL:-supragoflow-gocache}"
 CACHE_STRATEGY="${SUPRAGOFLOW_CACHE_STRATEGY:-volume}"
 HOST_CACHE_ROOT="${SUPRAGOFLOW_HOST_CACHE_ROOT:-${ROOT}/.cache/supragoflow}"
+CONTRACT_FILE="${ROOT}/contracts/gg-interface.json"
 
 run_with_timeout() {
   local timeout_sec="$1"; shift
@@ -153,24 +155,38 @@ ensure_images() {
 
 run_in_image() {
   local image="$1"; shift
+  local uid gid
+  uid="$(id -u)"
+  gid="$(id -g)"
   if [[ "$CACHE_STRATEGY" == "host" ]]; then
     mkdir -p "${HOST_CACHE_ROOT}/gocache" "${HOST_CACHE_ROOT}/gomodcache"
     run_with_timeout "$TIMEOUT_STAGE_SEC" "docker run ${image}" docker run --rm -t \
+      --user "${uid}:${gid}" \
       -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}" \
       -v "${HOST_CACHE_ROOT}/gocache:/go-cache" \
       -v "${HOST_CACHE_ROOT}/gomodcache:/go/pkg/mod" \
       -e GOCACHE=/go-cache \
       -e GOMODCACHE=/go/pkg/mod \
       -e GOPATH=/go \
+      -e HOME=/tmp \
+      -e XDG_CACHE_HOME=/tmp/.cache \
       "$image" bash -c "$*"
   else
+    # Named volumes are commonly initialized as root-owned; ensure host UID/GID can write.
+    run_with_timeout "$TIMEOUT_STAGE_SEC" "docker prepare writable volumes for ${image}" docker run --rm \
+      -v "${CACHEVOL}:/go-cache" \
+      -v "${MODVOL}:/go/pkg/mod" \
+      "$image" bash -lc "mkdir -p /go-cache /go/pkg/mod && chown -R ${uid}:${gid} /go-cache /go/pkg/mod"
     run_with_timeout "$TIMEOUT_STAGE_SEC" "docker run ${image}" docker run --rm -t \
+      --user "${uid}:${gid}" \
       -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}" \
       -v "${CACHEVOL}:/go-cache" \
       -v "${MODVOL}:/go/pkg/mod" \
       -e GOCACHE=/go-cache \
       -e GOMODCACHE=/go/pkg/mod \
       -e GOPATH=/go \
+      -e HOME=/tmp \
+      -e XDG_CACHE_HOME=/tmp/.cache \
       "$image" bash -c "$*"
   fi
 }
@@ -369,6 +385,16 @@ done
 
 LOG_LEVEL="$(normalize_log_level "$LOG_LEVEL")"
 LOG_FORMAT="$(normalize_log_format "$LOG_FORMAT")"
+if [[ -n "${SUPRAGOFLOW_EXPECT_LOG_SCHEMA_VERSION:-}" ]] && [[ "${SUPRAGOFLOW_EXPECT_LOG_SCHEMA_VERSION}" != "${LOG_SCHEMA_VERSION}" ]]; then
+  echo "log schema compatibility mismatch: expected ${SUPRAGOFLOW_EXPECT_LOG_SCHEMA_VERSION}, actual ${LOG_SCHEMA_VERSION}" >&2
+  echo "update consumer expectations or align SUPRAGOFLOW_EXPECT_LOG_SCHEMA_VERSION with the current gg log schema" >&2
+  exit 2
+fi
+if [[ -n "${SUPRAGOFLOW_EXPECT_GG_INTERFACE_VERSION:-}" ]] && [[ "${SUPRAGOFLOW_EXPECT_GG_INTERFACE_VERSION}" != "${GG_INTERFACE_VERSION}" ]]; then
+  echo "gg interface compatibility mismatch: expected ${SUPRAGOFLOW_EXPECT_GG_INTERFACE_VERSION}, actual ${GG_INTERFACE_VERSION}" >&2
+  echo "run 'gg contract' to inspect the supported interface contract and update consumer expectations" >&2
+  exit 2
+fi
 if [[ "$LOG_LEVEL" == "debug" ]]; then
   DOCKER_QUIET=0
 else
@@ -388,6 +414,9 @@ case "$stage" in
   vuln) run "$DEV_IMAGE" 'govulncheck ./...' ;;
   self-test)
     "${ROOT}/scripts/test-output-template.sh"
+    "${ROOT}/scripts/test-gg-contract.sh"
+    "${ROOT}/scripts/test-gg-diagnose.sh"
+    "${ROOT}/scripts/test-gg-faults.sh"
     ;;
   test)
     if [[ -n "${TEST_PARALLEL}" ]]; then
@@ -458,6 +487,58 @@ case "$stage" in
     log_msg info "building dev image: $DEV_IMAGE"
     docker_build_with_verbosity "$TIMEOUT_IMAGE_BUILD_SEC" "docker build ${DEV_IMAGE}" "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
+  contract)
+    if [[ ! -f "${CONTRACT_FILE}" ]]; then
+      echo "missing contract file: ${CONTRACT_FILE}" >&2
+      exit 2
+    fi
+    cat "${CONTRACT_FILE}"
+    ;;
+  validate-config)
+    required_versions=(DEBIAN_BASE GO_VERSION GOLANGCI_LINT_VERSION GOVULNCHECK_VERSION GOTESTSUM_VERSION)
+    for var_name in "${required_versions[@]}"; do
+      if [[ -z "${!var_name:-}" ]]; then
+        echo "config validation failed: ${var_name} is missing/empty in .versions" >&2
+        exit 2
+      fi
+    done
+    for ref in "${BUILD_IMAGE_REF}" "${DEV_IMAGE_REF}"; do
+      if [[ -n "${ref}" ]] && ! [[ "${ref}" =~ @sha256:[a-f0-9]{64}$ ]]; then
+        log_msg warn "non-digest image ref configured (${ref}); digest-pinned refs are preferred for stronger reproducibility"
+      fi
+    done
+    log_msg info "configuration validation passed"
+    ;;
+  verify-writable)
+    current_uid="$(id -u)"
+    current_gid="$(id -g)"
+    if [[ $# -gt 0 ]]; then
+      writable_paths=("$@")
+    else
+      writable_paths=("${ROOT}/dist" "${HOST_CACHE_ROOT}")
+    fi
+
+    for path in "${writable_paths[@]}"; do
+      mkdir -p "${path}" || {
+        echo "writability check failed: cannot create '${path}'" >&2
+        exit 2
+      }
+      owner_uid="$(stat -c %u "${path}" 2>/dev/null || stat -f %u "${path}" 2>/dev/null || echo unknown)"
+      if [[ "${owner_uid}" != "unknown" ]] && [[ "${owner_uid}" != "${current_uid}" ]]; then
+        echo "ownership check failed: ${path} owned by uid ${owner_uid}, expected ${current_uid}" >&2
+        echo "remediation: sudo chown -R ${current_uid}:${current_gid} ${path}" >&2
+        exit 2
+      fi
+      probe="${path}/.gg-writable-${RUN_ID}-$$"
+      if ! : > "${probe}" 2>/dev/null; then
+        echo "writability check failed: cannot write to ${path}" >&2
+        echo "remediation: ensure current user (${current_uid}:${current_gid}) has write permission" >&2
+        exit 2
+      fi
+      rm -f "${probe}"
+    done
+    log_msg info "writability checks passed"
+    ;;
   cache-prune)
     if [[ "$CACHE_STRATEGY" != "host" ]]; then
       log_msg info "cache-prune skipped (SUPRAGOFLOW_CACHE_STRATEGY=${CACHE_STRATEGY}; host required)"
@@ -498,12 +579,19 @@ case "$stage" in
       echo "cache_strategy=${CACHE_STRATEGY}"
     } > "${out_dir}/summary.txt"
 
-    (env | grep -E '^(SUPRAGOFLOW_|GHCR_|GITHUB_)' | sort) > "${out_dir}/env.txt" 2>/dev/null || true
+    {
+      while IFS='=' read -r key value; do
+        if [[ "${key}" =~ (TOKEN|SECRET|PASSWORD|PASS|KEY|PRIVATE|CREDENTIAL) ]]; then
+          value="[REDACTED]"
+        fi
+        printf '%s=%s\n' "${key}" "${value}"
+      done < <(env | grep -E '^(SUPRAGOFLOW_|GHCR_|GITHUB_)' | sort)
+    } > "${out_dir}/env.txt" 2>/dev/null || true
     (git -C "${ROOT}" status -sb) > "${out_dir}/git-status.txt" 2>/dev/null || true
     (git -C "${ROOT}" log --oneline -n 10) > "${out_dir}/git-log.txt" 2>/dev/null || true
     (cat "${ROOT}/.versions") > "${out_dir}/toolchain-versions.txt" 2>/dev/null || true
     (du -sh "${ROOT}/dist" "${HOST_CACHE_ROOT}" 2>/dev/null || true) > "${out_dir}/sizes.txt" 2>/dev/null || true
-    (./scripts/gg --log-level error --log-format text self-test) > "${out_dir}/self-test.txt" 2>&1 || true
+    ("${ROOT}/scripts/test-output-template.sh") > "${out_dir}/self-test.txt" 2>&1 || true
 
     if command -v docker >/dev/null 2>&1; then
       run_with_timeout 20 "diagnose docker images" docker image ls > "${out_dir}/docker-images.txt" 2>&1 || true
@@ -576,6 +664,9 @@ stages:
   vuln
   self-test
   test
+  contract
+  validate-config
+  verify-writable [path...]
   targets
   build <goos> <goarch> [--output-template <template>] [--print-output-name]
   package

@@ -79,6 +79,9 @@ The `./scripts/gg` entrypoint supports the following stages:
 | `vuln` | Run vulnerability check (`govulncheck`) |
 | `self-test` | Run local shell-level harness checks (non-Docker) |
 | `test` | Run tests |
+| `contract` | Print machine-readable `gg` interface contract manifest |
+| `validate-config` | Validate required stored configuration inputs |
+| `verify-writable [path...]` | Verify writable/owned output paths for current user |
 | `targets` | List supported build targets |
 | `build <goos> <goarch> [--output-template <template>]` | Build binary for target OS/Arch |
 | `package` | Package artifacts (create checksums) |
@@ -89,6 +92,9 @@ The `./scripts/gg` entrypoint supports the following stages:
 
 Global `gg` logging options (place before stage): `--log-level <debug|info|warn|error|none>`, `--log-format <text|json>`, `--run-id <id>`.
 When `--log-format json` is used, logs include `logSchemaVersion` and `run_id` fields.
+Optional strict compatibility checks are supported with:
+- `SUPRAGOFLOW_EXPECT_LOG_SCHEMA_VERSION`
+- `SUPRAGOFLOW_EXPECT_GG_INTERFACE_VERSION`
 
 Runtime bounds are configurable with env vars, including:
 `SUPRAGOFLOW_TIMEOUT_STAGE_SEC`, `SUPRAGOFLOW_TIMEOUT_PULL_SEC`, `SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC`, `SUPRAGOFLOW_TIMEOUT_SMOKE_SEC`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`.
@@ -113,6 +119,7 @@ SUPRAGOFLOW_BUILD_VERSION=v1.2.3 ./scripts/gg build windows amd64 --output-templ
 ```
 
 `supragoflow --version --json` emits machine-readable build metadata with `schemaVersion`.
+Optional strict compatibility check is supported with `SUPRAGOFLOW_EXPECT_SCHEMA_VERSION`.
 
 ## VS Code Dev Container
 
