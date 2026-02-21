@@ -13,6 +13,12 @@ LOG_FORMAT="${SUPRAGOFLOW_LOG_FORMAT:-text}"
 RUN_ID="${SUPRAGOFLOW_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 REMOTE_PULL_DISABLED_NOTIFIED=0
 LOG_SCHEMA_VERSION="1"
+PULL_RETRIES="${SUPRAGOFLOW_PULL_RETRIES:-3}"
+PULL_BACKOFF_SEC="${SUPRAGOFLOW_PULL_BACKOFF_SEC:-2}"
+TIMEOUT_STAGE_SEC="${SUPRAGOFLOW_TIMEOUT_STAGE_SEC:-1800}"
+TIMEOUT_PULL_SEC="${SUPRAGOFLOW_TIMEOUT_PULL_SEC:-300}"
+TIMEOUT_IMAGE_BUILD_SEC="${SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC:-1800}"
+TIMEOUT_SMOKE_SEC="${SUPRAGOFLOW_TIMEOUT_SMOKE_SEC:-600}"
 
 BUILD_ARGS=(
   --build-arg GO_VERSION="${GO_VERSION:-1.25.7}"
@@ -36,6 +42,32 @@ fi
 # Named volumes for speed (safe for humans/agents)
 MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
 CACHEVOL="${SUPRAGOFLOW_CACHEVOL:-supragoflow-gocache}"
+
+run_with_timeout() {
+  local timeout_sec="$1"; shift
+  if [[ "$timeout_sec" =~ ^[0-9]+$ ]] && [[ "$timeout_sec" -gt 0 ]] && command -v timeout >/dev/null 2>&1; then
+    timeout "${timeout_sec}s" "$@"
+  else
+    "$@"
+  fi
+}
+
+docker_pull_with_retry() {
+  local image_ref="$1"
+  local attempts="${PULL_RETRIES}"
+  local backoff="${PULL_BACKOFF_SEC}"
+  local i
+  for ((i=1; i<=attempts; i++)); do
+    if run_with_timeout "$TIMEOUT_PULL_SEC" docker pull "$image_ref" >/dev/null 2>&1; then
+      return 0
+    fi
+    if [[ "$i" -lt "$attempts" ]]; then
+      log_msg warn "docker pull attempt ${i}/${attempts} failed for ${image_ref}; retrying in ${backoff}s"
+      sleep "$backoff"
+    fi
+  done
+  return 1
+}
 
 level_rank() {
   case "$1" in
@@ -124,7 +156,7 @@ pull_images() {
   local dev_remote="ghcr.io/$org/supragoflow-dev:$tag"
 
   if ! image_exists "$BUILD_IMAGE"; then
-    if docker pull "$build_remote" >/dev/null 2>&1; then
+    if docker_pull_with_retry "$build_remote"; then
       log_msg info "pulled build image from $build_remote"
       docker tag "$build_remote" "$BUILD_IMAGE"
     else
@@ -133,7 +165,7 @@ pull_images() {
   fi
 
   if ! image_exists "$DEV_IMAGE"; then
-    if docker pull "$dev_remote" >/dev/null 2>&1; then
+    if docker_pull_with_retry "$dev_remote"; then
       log_msg info "pulled dev image from $dev_remote"
       docker tag "$dev_remote" "$DEV_IMAGE"
     else
@@ -148,17 +180,17 @@ ensure_images() {
   # Build locally if missing (incremental bring-up friendly)
   if ! image_exists "$BUILD_IMAGE"; then
     log_msg info "building build image: $BUILD_IMAGE"
-    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
   fi
   if ! image_exists "$DEV_IMAGE"; then
     log_msg info "building dev image: $DEV_IMAGE"
-    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
   fi
 }
 
 run_in_image() {
   local image="$1"; shift
-  docker run --rm -t     -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}"     -v "${CACHEVOL}:/go-cache"     -v "${MODVOL}:/go/pkg/mod"     -e GOCACHE=/go-cache     -e GOMODCACHE=/go/pkg/mod     -e GOPATH=/go     "$image" bash -c "$*"
+  run_with_timeout "$TIMEOUT_STAGE_SEC" docker run --rm -t     -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}"     -v "${CACHEVOL}:/go-cache"     -v "${MODVOL}:/go/pkg/mod"     -e GOCACHE=/go-cache     -e GOMODCACHE=/go/pkg/mod     -e GOPATH=/go     "$image" bash -c "$*"
 }
 
 run() {
@@ -305,10 +337,10 @@ case "$stage" in
     fi
     out="dist/${goos}-${goarch}"
     # Embed simple version info for local builds
-    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=${build_version} -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=${build_date} -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${artifact_name} ./cmd/supragoflow"
+    run "$BUILD_IMAGE" "mkdir -p ${out} && tmp='${out}/.${artifact_name}.tmp.\$\$' && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=${build_version} -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=${build_date} -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o \"\${tmp}\" ./cmd/supragoflow && mv -f \"\${tmp}\" ${out}/${artifact_name}"
     ;;
   package)
-    run "$BUILD_IMAGE" "mkdir -p dist && cd dist && (command -v sha256sum >/dev/null && sha256sum -b */* > SHA256SUMS || true)"
+    run "$BUILD_IMAGE" "mkdir -p dist && cd dist && if command -v sha256sum >/dev/null; then tmp=.SHA256SUMS.tmp.\$\$; sha256sum -b */* > \"\${tmp}\" && mv -f \"\${tmp}\" SHA256SUMS; fi"
     ;;
   images)
     if in_container; then
@@ -316,9 +348,9 @@ case "$stage" in
       exit 2
     fi
     log_msg info "building build image: $BUILD_IMAGE"
-    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
     log_msg info "building dev image: $DEV_IMAGE"
-    docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
   targets)
     run "$DEV_IMAGE" 'go tool dist list'
@@ -337,7 +369,7 @@ case "$stage" in
     fi
     # Use official WineBot entrypoint with explorer supervision disabled for CLI workloads
     log_msg info "running version check (WineBot E2E)"
-    docker run --rm \
+    run_with_timeout "$TIMEOUT_SMOKE_SEC" docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
       -e APP_ARGS="--version --json" \
@@ -346,7 +378,7 @@ case "$stage" in
       "$WINE_IMAGE"
 
     log_msg info "running tls check (WineBot E2E)"
-    docker run --rm \
+    run_with_timeout "$TIMEOUT_SMOKE_SEC" docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
       -e APP_ARGS="check-tls" \
@@ -355,7 +387,7 @@ case "$stage" in
       "$WINE_IMAGE"
 
     log_msg info "running ssh check (WineBot E2E)"
-    docker run --rm \
+    run_with_timeout "$TIMEOUT_SMOKE_SEC" docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
       -e APP_ARGS="check-ssh" \

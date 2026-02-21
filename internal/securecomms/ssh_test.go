@@ -7,6 +7,7 @@ import (
 	"encoding/pem"
 	"net"
 	"testing"
+	"time"
 
 	"golang.org/x/crypto/ssh"
 	"golang.org/x/crypto/ssh/knownhosts"
@@ -92,6 +93,33 @@ func TestNewSSHClientConfig(t *testing.T) {
 	// Verify HostKeyCallback works
 	if err := cfg.HostKeyCallback("example.com:22", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}, hostSigner.PublicKey()); err != nil {
 		t.Fatalf("expected host key callback success, got: %v", err)
+	}
+}
+
+func TestNewSSHClientConfigWithTimeout(t *testing.T) {
+	clientKeyPEM, err := generateRSAPrivateKeyPEM()
+	if err != nil {
+		t.Fatalf("generateRSAPrivateKeyPEM: %v", err)
+	}
+	hostKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey: %v", err)
+	}
+	hostSigner, err := ssh.NewSignerFromKey(hostKey)
+	if err != nil {
+		t.Fatalf("ssh.NewSignerFromKey: %v", err)
+	}
+	knownHostsLine := knownhosts.Line([]string{"example.com"}, hostSigner.PublicKey())
+
+	cfg, err := NewSSHClientConfigWithTimeout("alice", clientKeyPEM, []byte(knownHostsLine+"\n"), 3*time.Second)
+	if err != nil {
+		t.Fatalf("NewSSHClientConfigWithTimeout returned error: %v", err)
+	}
+	if cfg.Timeout != 3*time.Second {
+		t.Fatalf("unexpected timeout: %v", cfg.Timeout)
+	}
+	if _, err := NewSSHClientConfigWithTimeout("alice", clientKeyPEM, []byte(knownHostsLine+"\n"), 0); err == nil {
+		t.Fatal("expected error for non-positive timeout")
 	}
 }
 

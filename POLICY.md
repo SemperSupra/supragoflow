@@ -44,6 +44,7 @@ Typical gates for incremental development:
 - Each `gg` invocation includes a run correlation id (`--run-id` or auto-generated) in log messages.
 - JSON log output includes `logSchemaVersion` for compatibility-aware consumers.
 - Informational diagnostics should be bounded; avoid repeating non-actionable messages across stages.
+- Timeouts and pull retry/backoff are configurable to bound long-running operations (`SUPRAGOFLOW_TIMEOUT_*`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`).
 
 ## Builds (build image)
 
