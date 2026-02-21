@@ -3,6 +3,16 @@ name: Release (publish GHCR images)
 on:
   release:
     types: [published]
+  workflow_dispatch:
+    inputs:
+      release_tag:
+        description: "Release tag to validate (e.g. v0.0.5)"
+        required: true
+      validate_only:
+        description: "Run build + diagnostics only; skip immutable release-tag publish and release asset upload"
+        required: false
+        default: true
+        type: boolean
 
 permissions:
   contents: write
@@ -14,7 +24,7 @@ jobs:
     timeout-minutes: 45
     environment: release
     concurrency:
-      group: release-${{ github.event.release.tag_name }}
+      group: release-${{ github.event.release.tag_name || inputs.release_tag || github.run_id }}
       cancel-in-progress: false
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
@@ -40,9 +50,21 @@ jobs:
         run: |
           cat .versions >> $GITHUB_ENV
 
+      - name: Resolve release execution mode
+        run: |
+          if [[ "${{ github.event_name }}" == "release" ]]; then
+            echo "RELEASE_TAG=${{ github.event.release.tag_name }}" >> "$GITHUB_ENV"
+            echo "VALIDATE_ONLY=false" >> "$GITHUB_ENV"
+          else
+            echo "RELEASE_TAG=${{ inputs.release_tag }}" >> "$GITHUB_ENV"
+            echo "VALIDATE_ONLY=${{ inputs.validate_only }}" >> "$GITHUB_ENV"
+          fi
+          echo "Release tag: ${RELEASE_TAG:-${{ github.event.release.tag_name || inputs.release_tag }}}"
+          echo "Validate-only mode: ${VALIDATE_ONLY:-${{ inputs.validate_only || 'false' }}}"
+
       - name: Prepare release image refs
         run: |
-          tag="${{ github.event.release.tag_name }}"
+          tag="${RELEASE_TAG}"
           tmp_suffix="tmp-${{ github.run_id }}-${{ github.run_attempt }}"
           echo "BUILD_IMAGE_REF=ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${tag}" >> $GITHUB_ENV
           echo "DEV_IMAGE_REF=ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${tag}" >> $GITHUB_ENV
@@ -67,12 +89,14 @@ jobs:
             ${{ env.BUILD_IMAGE_TMP_REF }}
 
       - name: Resolve existing build release tag digest
+        if: env.VALIDATE_ONLY != 'true'
         id: build_existing
         run: |
           existing_digest="$(./scripts/release-tag-immutability.sh resolve-existing "${BUILD_IMAGE_REF}")"
           echo "existing_digest=${existing_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Enforce build image tag immutability
+        if: env.VALIDATE_ONLY != 'true'
         env:
           SUPRAGOFLOW_ALLOW_TAG_OVERWRITE: ${{ vars.SUPRAGOFLOW_ALLOW_TAG_OVERWRITE || 'false' }}
         run: |
@@ -82,6 +106,7 @@ jobs:
             "${{ steps.build_image_tmp.outputs.digest }}"
 
       - name: Publish build release tag
+        if: env.VALIDATE_ONLY != 'true'
         run: |
           docker buildx imagetools create \
             -t "${BUILD_IMAGE_REF}" \
@@ -108,12 +133,14 @@ jobs:
             ${{ env.DEV_IMAGE_TMP_REF }}
 
       - name: Resolve existing dev release tag digest
+        if: env.VALIDATE_ONLY != 'true'
         id: dev_existing
         run: |
           existing_digest="$(./scripts/release-tag-immutability.sh resolve-existing "${DEV_IMAGE_REF}")"
           echo "existing_digest=${existing_digest}" >> "$GITHUB_OUTPUT"
 
       - name: Enforce dev image tag immutability
+        if: env.VALIDATE_ONLY != 'true'
         env:
           SUPRAGOFLOW_ALLOW_TAG_OVERWRITE: ${{ vars.SUPRAGOFLOW_ALLOW_TAG_OVERWRITE || 'false' }}
         run: |
@@ -123,6 +150,7 @@ jobs:
             "${{ steps.dev_image_tmp.outputs.digest }}"
 
       - name: Publish dev release tag
+        if: env.VALIDATE_ONLY != 'true'
         run: |
           docker buildx imagetools create \
             -t "${DEV_IMAGE_REF}" \
@@ -138,12 +166,13 @@ jobs:
         run: |
           echo "[release][liveness] starting SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "[release][liveness] building linux amd64 binary"
-          SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build linux amd64
+          SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build linux amd64
           echo "[release][liveness] building windows amd64 binary"
-          SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build windows amd64
+          SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build windows amd64
           echo "[release][liveness] completed SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Generate SBOM (build image)
+        if: env.VALIDATE_ONLY != 'true'
         uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
         with:
           image: ${{ env.BUILD_IMAGE_REF }}
@@ -151,6 +180,7 @@ jobs:
           output-file: sbom-supragoflow-build-image.spdx.json
 
       - name: Generate SBOM (dev image)
+        if: env.VALIDATE_ONLY != 'true'
         uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
         with:
           image: ${{ env.DEV_IMAGE_REF }}
@@ -172,9 +202,10 @@ jobs:
           output-file: sbom-supragoflow-windows-amd64.spdx.json
 
       - name: Upload SBOM assets to release
+        if: env.VALIDATE_ONLY != 'true'
         uses: softprops/action-gh-release@a06a81a03ee405af7f2048a818ed3f03bbf83c7b # v2
         with:
-          tag_name: ${{ github.event.release.tag_name }}
+          tag_name: ${{ env.RELEASE_TAG }}
           files: |
             sbom-supragoflow-build-image.spdx.json
             sbom-supragoflow-dev-image.spdx.json
