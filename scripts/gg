@@ -12,6 +12,7 @@ LOG_LEVEL="${SUPRAGOFLOW_LOG_LEVEL:-info}"
 LOG_FORMAT="${SUPRAGOFLOW_LOG_FORMAT:-text}"
 RUN_ID="${SUPRAGOFLOW_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
 REMOTE_PULL_DISABLED_NOTIFIED=0
+LOG_SCHEMA_VERSION="1"
 
 BUILD_ARGS=(
   --build-arg GO_VERSION="${GO_VERSION:-1.25.7}"
@@ -85,7 +86,8 @@ log_msg() {
   local ts
   ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
   if [[ "$LOG_FORMAT" == "json" ]]; then
-    printf '{"ts":"%s","run_id":"%s","component":"gg","level":"%s","msg":"%s"}\n' \
+    printf '{"logSchemaVersion":"%s","ts":"%s","run_id":"%s","component":"gg","level":"%s","msg":"%s"}\n' \
+      "$(json_escape "$LOG_SCHEMA_VERSION")" \
       "$(json_escape "$ts")" \
       "$(json_escape "$RUN_ID")" \
       "$(json_escape "$level")" \

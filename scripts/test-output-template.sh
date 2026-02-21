@@ -68,4 +68,9 @@ run_and_capture out status env SUPRAGOFLOW_BUILD_VERSION=v1.2.3 "$GG" build linu
 [[ "$status" -eq 2 ]] || fail "unknown build option should exit with status 2"
 assert_contains "$out" "unknown build option" "unknown option validation message"
 
+run_and_capture out status env SUPRAGOFLOW_BUILD_VERSION=v1.2.3 "$GG" --log-format json --log-level debug build linux amd64 --print-output-name
+[[ "$status" -eq 0 ]] || fail "json logging self-test run should succeed"
+assert_contains "$out" "\"logSchemaVersion\":\"1\"" "json log schema version"
+assert_contains "$out" "\"run_id\":\"" "json log run id field"
+
 echo "output-template tests passed"

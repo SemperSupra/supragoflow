@@ -80,9 +80,12 @@ func TestRunVersionJSON(t *testing.T) {
 	if err := json.Unmarshal(out.Bytes(), &payload); err != nil {
 		t.Fatalf("invalid JSON output: %v\noutput: %q", err, out.String())
 	}
-	for _, key := range []string{"version", "commit", "date", "builtBy"} {
+	for _, key := range []string{"schemaVersion", "version", "commit", "date", "builtBy"} {
 		if _, ok := payload[key]; !ok {
 			t.Fatalf("missing key %q in JSON output: %v", key, payload)
 		}
+	}
+	if payload["schemaVersion"] != "1" {
+		t.Fatalf("unexpected schemaVersion %q", payload["schemaVersion"])
 	}
 }
