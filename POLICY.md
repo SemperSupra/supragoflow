@@ -91,7 +91,13 @@ Typical gates for incremental development:
 
 - Pull requests run a fast gate by default (format/vet/lint/test/linux build).
 - Full gate (including vulnerability scan and Wine-based Windows smoke) runs on `main` pushes.
+- CI includes repository secret scanning.
+- All GitHub Actions must be pinned to immutable commit SHAs.
 
+## Release security
+
+- Release publish job uses protected `release` environment controls.
+- Release workflow publishes SBOM assets for release images and binaries.
 ## Service discoverability
 
 - Local service discovery (Bonjour/mDNS) is not applicable to the current CLI-only architecture.
