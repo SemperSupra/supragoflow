@@ -88,6 +88,9 @@ The `./scripts/gg` entrypoint supports the following stages:
 Global `gg` logging options (place before stage): `--log-level <debug|info|warn|error|none>`, `--log-format <text|json>`, `--run-id <id>`.
 When `--log-format json` is used, logs include `logSchemaVersion` and `run_id` fields.
 
+Runtime bounds are configurable with env vars, including:
+`SUPRAGOFLOW_TIMEOUT_STAGE_SEC`, `SUPRAGOFLOW_TIMEOUT_PULL_SEC`, `SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC`, `SUPRAGOFLOW_TIMEOUT_SMOKE_SEC`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`.
+
 `smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
 
 `build` supports semantic artifact naming templates with tokens: `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.

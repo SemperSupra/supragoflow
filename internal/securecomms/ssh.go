@@ -43,6 +43,12 @@ var secureSSHMACs = []string{
 
 // NewSSHClientConfig builds a strict SSH client config using known_hosts validation.
 func NewSSHClientConfig(user string, privateKeyPEM []byte, knownHostsData []byte) (*ssh.ClientConfig, error) {
+	return NewSSHClientConfigWithTimeout(user, privateKeyPEM, knownHostsData, 10*time.Second)
+}
+
+// NewSSHClientConfigWithTimeout builds a strict SSH client config using
+// known_hosts validation and a caller-controlled connection timeout.
+func NewSSHClientConfigWithTimeout(user string, privateKeyPEM []byte, knownHostsData []byte, timeout time.Duration) (*ssh.ClientConfig, error) {
 	if user == "" {
 		return nil, errors.New("user is required")
 	}
@@ -51,6 +57,9 @@ func NewSSHClientConfig(user string, privateKeyPEM []byte, knownHostsData []byte
 	}
 	if len(knownHostsData) == 0 {
 		return nil, errors.New("known_hosts data is required")
+	}
+	if timeout <= 0 {
+		return nil, errors.New("timeout must be > 0")
 	}
 
 	signer, err := ssh.ParsePrivateKey(privateKeyPEM)
@@ -94,6 +103,6 @@ func NewSSHClientConfig(user string, privateKeyPEM []byte, knownHostsData []byte
 		User:            user,
 		Auth:            []ssh.AuthMethod{ssh.PublicKeys(signer)},
 		HostKeyCallback: hostKeyCallback,
-		Timeout:         10 * time.Second,
+		Timeout:         timeout,
 	}, nil
 }
