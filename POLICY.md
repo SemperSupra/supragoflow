@@ -46,6 +46,7 @@ Typical gates for incremental development:
 - Informational diagnostics should be bounded; avoid repeating non-actionable messages across stages.
 - Timeouts and pull retry/backoff are configurable to bound long-running operations (`SUPRAGOFLOW_TIMEOUT_*`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`).
 - Long-running operations provide liveness/progress feedback with configurable heartbeat interval (`SUPRAGOFLOW_HEARTBEAT_SEC`).
+- Cache strategy is configurable (`SUPRAGOFLOW_CACHE_STRATEGY=volume|host`); CI should prefer `host` to enable cache restore/save across runs.
 
 ## Builds (build image)
 
@@ -80,6 +81,7 @@ Typical gates for incremental development:
 - Release workflows publish explicit release tags only; `:latest` is not part of the canonical path.
 - Users/agents should prefer GHCR release tags over local images.
 - `scripts/gg` only attempts remote pulls when `SUPRAGOFLOW_IMAGE_TAG` is set.
+- CI may set repository variable `SUPRAGOFLOW_IMAGE_TAG` to a canonical release tag to enable pull-first image reuse before local fallback build.
 - `gg smoke-windows` requires an explicit runner image via `SUPRAGOFLOW_WINE_RUNNER_IMAGE`.
 
 ## Service discoverability

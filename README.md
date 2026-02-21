@@ -91,8 +91,12 @@ When `--log-format json` is used, logs include `logSchemaVersion` and `run_id` f
 Runtime bounds are configurable with env vars, including:
 `SUPRAGOFLOW_TIMEOUT_STAGE_SEC`, `SUPRAGOFLOW_TIMEOUT_PULL_SEC`, `SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC`, `SUPRAGOFLOW_TIMEOUT_SMOKE_SEC`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`.
 Liveness heartbeat interval for long operations is configurable via `SUPRAGOFLOW_HEARTBEAT_SEC` (set `0` to disable periodic in-progress logs).
+Cache behavior is configurable via `SUPRAGOFLOW_CACHE_STRATEGY`:
+- `volume` (default): Docker named volumes for local iterative runs
+- `host`: bind mounts under `SUPRAGOFLOW_HOST_CACHE_ROOT` (default `.cache/supragoflow`) for CI cache restore/save compatibility
 
 `smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
+To enable pull-first CI image reuse from GHCR release images, set repository variable `SUPRAGOFLOW_IMAGE_TAG` to a canonical release tag.
 
 `build` supports semantic artifact naming templates with tokens: `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.
 For reproducible metadata, `SUPRAGOFLOW_BUILD_DATE` can be set to a fixed RFC3339 UTC timestamp used for embedded build date.
