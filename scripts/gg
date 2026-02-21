@@ -21,6 +21,7 @@ TIMEOUT_PULL_SEC="${SUPRAGOFLOW_TIMEOUT_PULL_SEC:-300}"
 TIMEOUT_IMAGE_BUILD_SEC="${SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC:-1800}"
 TIMEOUT_SMOKE_SEC="${SUPRAGOFLOW_TIMEOUT_SMOKE_SEC:-600}"
 HEARTBEAT_SEC="${SUPRAGOFLOW_HEARTBEAT_SEC:-30}"
+HEARTBEAT_RESOURCE="${SUPRAGOFLOW_HEARTBEAT_RESOURCE:-1}"
 TEST_PARALLEL="${SUPRAGOFLOW_TEST_PARALLEL:-}"
 BUILD_PARALLEL="${SUPRAGOFLOW_BUILD_PARALLEL:-}"
 DOCKER_QUIET=0
@@ -54,6 +55,47 @@ CACHE_STRATEGY="${SUPRAGOFLOW_CACHE_STRATEGY:-volume}"
 HOST_CACHE_ROOT="${SUPRAGOFLOW_HOST_CACHE_ROOT:-${ROOT}/.cache/supragoflow}"
 CONTRACT_FILE="${ROOT}/contracts/gg-interface.json"
 
+emit_resource_heartbeat() {
+  local pid="$1"
+  local desc="$2"
+  local elapsed="$3"
+  local proc_metrics=""
+  local mem_metrics=""
+  local disk_metrics=""
+  local load_metrics=""
+
+  if [[ "${HEARTBEAT_RESOURCE}" != "1" ]]; then
+    log_msg info "in-progress: ${desc} elapsed=${elapsed}s"
+    return
+  fi
+
+  if command -v ps >/dev/null 2>&1; then
+    proc_metrics="$(ps -p "${pid}" -o %cpu=,%mem=,rss=,vsz=,etime=,stat= 2>/dev/null | awk '{printf "proc_cpu_pct=%s proc_mem_pct=%s proc_rss_kb=%s proc_vsz_kb=%s proc_etime=%s proc_state=%s", $1,$2,$3,$4,$5,$6}')"
+  fi
+
+  if [[ -r /proc/meminfo ]]; then
+    mem_metrics="$(awk '
+      /MemTotal:/ {total=$2}
+      /MemAvailable:/ {avail=$2}
+      END {
+        if (total > 0) {
+          used=total-avail
+          printf "host_mem_used_mb=%.0f host_mem_avail_mb=%.0f", used/1024, avail/1024
+        }
+      }' /proc/meminfo)"
+  fi
+
+  if [[ -r /proc/loadavg ]]; then
+    load_metrics="$(awk '{printf "host_load_1m=%s host_load_5m=%s host_load_15m=%s", $1,$2,$3}' /proc/loadavg)"
+  fi
+
+  if command -v df >/dev/null 2>&1; then
+    disk_metrics="$(df -Pm "${ROOT}" 2>/dev/null | awk 'NR==2 {printf "disk_used_mb=%s disk_avail_mb=%s disk_use_pct=%s", $3,$4,$5}')"
+  fi
+
+  log_msg info "in-progress: ${desc} elapsed=${elapsed}s ${proc_metrics} ${mem_metrics} ${load_metrics} ${disk_metrics}"
+}
+
 run_with_timeout() {
   local timeout_sec="$1"; shift
   local desc="$1"; shift
@@ -73,7 +115,7 @@ run_with_timeout() {
     elapsed=$((now_ts - start_ts))
 
     if [[ "$HEARTBEAT_SEC" =~ ^[0-9]+$ ]] && [[ "$HEARTBEAT_SEC" -gt 0 ]] && (( elapsed > 0 )) && (( elapsed % HEARTBEAT_SEC == 0 )); then
-      log_msg info "in-progress: ${desc} elapsed=${elapsed}s"
+      emit_resource_heartbeat "$pid" "$desc" "$elapsed"
     fi
 
     if [[ "$timeout_sec" =~ ^[0-9]+$ ]] && [[ "$timeout_sec" -gt 0 ]] && (( elapsed >= timeout_sec )); then
