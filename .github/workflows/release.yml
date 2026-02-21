@@ -163,13 +163,53 @@ jobs:
           SUPRAGOFLOW_HOST_CACHE_ROOT: ${{ runner.temp }}/supragoflow-cache
           SUPRAGOFLOW_HEARTBEAT_SEC: 10
           SUPRAGOFLOW_HEARTBEAT_RESOURCE: 1
+          SUPRAGOFLOW_LOG_LEVEL: debug
         run: |
+          set -euo pipefail
+          diagnostics_dir="dist/diagnostics/release-sbom"
+          mkdir -p "${diagnostics_dir}"
+          log_file="${diagnostics_dir}/sbom-build.log"
+          touch "${log_file}"
+          exec > >(tee -a "${log_file}") 2>&1
+
+          capture_failure_diagnostics() {
+            local failed_cmd="$1"
+            local failed_exit="$2"
+            echo "[release][error] command failed: ${failed_cmd} (exit=${failed_exit})"
+            ./scripts/gg diagnose "${diagnostics_dir}" || true
+            docker ps -a > "${diagnostics_dir}/docker-ps.txt" 2>&1 || true
+            docker image ls > "${diagnostics_dir}/docker-images.txt" 2>&1 || true
+            docker system df > "${diagnostics_dir}/docker-system-df.txt" 2>&1 || true
+          }
+
+          run_or_capture() {
+            local cmd="$1"
+            set +e
+            eval "${cmd}"
+            local rc="$?"
+            set -e
+            if [[ "${rc}" -ne 0 ]]; then
+              capture_failure_diagnostics "${cmd}" "${rc}"
+              return "${rc}"
+            fi
+          }
+
           echo "[release][liveness] starting SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "[release][liveness] building linux amd64 binary"
-          SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build linux amd64
+          run_or_capture "SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build linux amd64"
           echo "[release][liveness] building windows amd64 binary"
-          SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build windows amd64
+          run_or_capture "SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build windows amd64"
           echo "[release][liveness] completed SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+
+      - name: Upload release diagnostics
+        if: always()
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: release-diagnostics-${{ github.run_id }}-${{ github.run_attempt }}
+          path: |
+            dist/diagnostics/
+          if-no-files-found: warn
+          retention-days: 14
 
       - name: Generate SBOM (build image)
         if: env.VALIDATE_ONLY != 'true'
