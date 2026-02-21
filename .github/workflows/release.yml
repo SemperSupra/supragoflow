@@ -51,12 +51,15 @@ jobs:
 
       - name: Build & push build image (temporary tag)
         id: build_image_tmp
+        timeout-minutes: 15
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/Dockerfile.build
           platforms: linux/amd64,linux/arm64
           push: true
+          cache-from: type=gha,scope=release-build
+          cache-to: type=gha,scope=release-build,mode=max
           build-args: |
             GO_VERSION=${{ env.GO_VERSION }}
             DEBIAN_BASE=${{ env.DEBIAN_BASE }}
@@ -86,12 +89,15 @@ jobs:
 
       - name: Build & push dev image (temporary tag)
         id: dev_image_tmp
+        timeout-minutes: 25
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
           file: docker/Dockerfile.dev
           platforms: linux/amd64,linux/arm64
           push: true
+          cache-from: type=gha,scope=release-dev
+          cache-to: type=gha,scope=release-dev,mode=max
           build-args: |
             GO_VERSION=${{ env.GO_VERSION }}
             GOLANGCI_LINT_VERSION=${{ env.GOLANGCI_LINT_VERSION }}
@@ -123,12 +129,19 @@ jobs:
             "ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev@${{ steps.dev_image_tmp.outputs.digest }}"
 
       - name: Build release binaries for SBOM
+        timeout-minutes: 15
         env:
           SUPRAGOFLOW_CACHE_STRATEGY: host
           SUPRAGOFLOW_HOST_CACHE_ROOT: ${{ runner.temp }}/supragoflow-cache
+          SUPRAGOFLOW_HEARTBEAT_SEC: 10
+          SUPRAGOFLOW_HEARTBEAT_RESOURCE: 1
         run: |
+          echo "[release][liveness] starting SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
+          echo "[release][liveness] building linux amd64 binary"
           SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build linux amd64
+          echo "[release][liveness] building windows amd64 binary"
           SUPRAGOFLOW_BUILD_VERSION=${{ github.event.release.tag_name }} ./scripts/gg build windows amd64
+          echo "[release][liveness] completed SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Generate SBOM (build image)
         uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
