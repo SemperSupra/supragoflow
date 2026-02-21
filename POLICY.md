@@ -83,10 +83,12 @@ Typical gates for incremental development:
 
 - Container images are built and pushed to GHCR **only** on GitHub Release (`release.published`).
 - Release workflows publish explicit release tags only; `:latest` is not part of the canonical path.
+- Release GHCR tags are immutable by default: publish fails on existing-tag digest mismatch.
 - Users/agents should prefer GHCR release tags over local images.
 - `scripts/gg` supports pull-first image reuse via explicit refs:
   - Preferred: `SUPRAGOFLOW_BUILD_IMAGE_REF` and `SUPRAGOFLOW_DEV_IMAGE_REF` (digest pinning supported).
   - Fallback: `SUPRAGOFLOW_IMAGE_TAG`.
+- Emergency override is explicit-only via `SUPRAGOFLOW_ALLOW_TAG_OVERWRITE=true` in release workflow context.
 - CI may set repository variable `SUPRAGOFLOW_IMAGE_TAG` to a canonical release tag to enable pull-first image reuse before local fallback build.
 - `gg smoke-windows` requires an explicit runner image via `SUPRAGOFLOW_WINE_RUNNER_IMAGE`.
 

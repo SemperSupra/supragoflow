@@ -418,6 +418,7 @@ case "$stage" in
     "${ROOT}/scripts/test-gg-contract.sh"
     "${ROOT}/scripts/test-gg-diagnose.sh"
     "${ROOT}/scripts/test-gg-faults.sh"
+    "${ROOT}/scripts/test-release-tag-immutability.sh"
     ;;
   test)
     if [[ -n "${TEST_PARALLEL}" ]]; then

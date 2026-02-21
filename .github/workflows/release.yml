@@ -40,7 +40,17 @@ jobs:
         run: |
           cat .versions >> $GITHUB_ENV
 
-      - name: Build & push build image
+      - name: Prepare release image refs
+        run: |
+          tag="${{ github.event.release.tag_name }}"
+          tmp_suffix="tmp-${{ github.run_id }}-${{ github.run_attempt }}"
+          echo "BUILD_IMAGE_REF=ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${tag}" >> $GITHUB_ENV
+          echo "DEV_IMAGE_REF=ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${tag}" >> $GITHUB_ENV
+          echo "BUILD_IMAGE_TMP_REF=ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${tmp_suffix}" >> $GITHUB_ENV
+          echo "DEV_IMAGE_TMP_REF=ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${tmp_suffix}" >> $GITHUB_ENV
+
+      - name: Build & push build image (temporary tag)
+        id: build_image_tmp
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -51,9 +61,31 @@ jobs:
             GO_VERSION=${{ env.GO_VERSION }}
             DEBIAN_BASE=${{ env.DEBIAN_BASE }}
           tags: |
-            ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${{ github.event.release.tag_name }}
+            ${{ env.BUILD_IMAGE_TMP_REF }}
 
-      - name: Build & push dev image
+      - name: Resolve existing build release tag digest
+        id: build_existing
+        run: |
+          existing_digest="$(./scripts/release-tag-immutability.sh resolve-existing "${BUILD_IMAGE_REF}")"
+          echo "existing_digest=${existing_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce build image tag immutability
+        env:
+          SUPRAGOFLOW_ALLOW_TAG_OVERWRITE: ${{ vars.SUPRAGOFLOW_ALLOW_TAG_OVERWRITE || 'false' }}
+        run: |
+          ./scripts/release-tag-immutability.sh evaluate \
+            "${BUILD_IMAGE_REF}" \
+            "${{ steps.build_existing.outputs.existing_digest }}" \
+            "${{ steps.build_image_tmp.outputs.digest }}"
+
+      - name: Publish build release tag
+        run: |
+          docker buildx imagetools create \
+            -t "${BUILD_IMAGE_REF}" \
+            "ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build@${{ steps.build_image_tmp.outputs.digest }}"
+
+      - name: Build & push dev image (temporary tag)
+        id: dev_image_tmp
         uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6
         with:
           context: .
@@ -67,7 +99,28 @@ jobs:
             GOTESTSUM_VERSION=${{ env.GOTESTSUM_VERSION }}
             DEBIAN_BASE=${{ env.DEBIAN_BASE }}
           tags: |
-            ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${{ github.event.release.tag_name }}
+            ${{ env.DEV_IMAGE_TMP_REF }}
+
+      - name: Resolve existing dev release tag digest
+        id: dev_existing
+        run: |
+          existing_digest="$(./scripts/release-tag-immutability.sh resolve-existing "${DEV_IMAGE_REF}")"
+          echo "existing_digest=${existing_digest}" >> "$GITHUB_OUTPUT"
+
+      - name: Enforce dev image tag immutability
+        env:
+          SUPRAGOFLOW_ALLOW_TAG_OVERWRITE: ${{ vars.SUPRAGOFLOW_ALLOW_TAG_OVERWRITE || 'false' }}
+        run: |
+          ./scripts/release-tag-immutability.sh evaluate \
+            "${DEV_IMAGE_REF}" \
+            "${{ steps.dev_existing.outputs.existing_digest }}" \
+            "${{ steps.dev_image_tmp.outputs.digest }}"
+
+      - name: Publish dev release tag
+        run: |
+          docker buildx imagetools create \
+            -t "${DEV_IMAGE_REF}" \
+            "ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev@${{ steps.dev_image_tmp.outputs.digest }}"
 
       - name: Build release binaries for SBOM
         run: |
@@ -77,14 +130,14 @@ jobs:
       - name: Generate SBOM (build image)
         uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
         with:
-          image: ghcr.io/${{ env.GHCR_ORG }}/supragoflow-build:${{ github.event.release.tag_name }}
+          image: ${{ env.BUILD_IMAGE_REF }}
           format: spdx-json
           output-file: sbom-supragoflow-build-image.spdx.json
 
       - name: Generate SBOM (dev image)
         uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
         with:
-          image: ghcr.io/${{ env.GHCR_ORG }}/supragoflow-dev:${{ github.event.release.tag_name }}
+          image: ${{ env.DEV_IMAGE_REF }}
           format: spdx-json
           output-file: sbom-supragoflow-dev-image.spdx.json
 
