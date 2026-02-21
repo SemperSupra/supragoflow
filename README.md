@@ -86,6 +86,7 @@ The `./scripts/gg` entrypoint supports the following stages:
 | `smoke-windows [goarch]` | Run Windows binary in Wine (default: amd64) |
 
 Global `gg` logging options (place before stage): `--log-level <debug|info|warn|error|none>`, `--log-format <text|json>`, `--run-id <id>`.
+When `--log-format json` is used, logs include `logSchemaVersion` and `run_id` fields.
 
 `smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
 
@@ -95,6 +96,8 @@ Example:
 ```bash
 SUPRAGOFLOW_BUILD_VERSION=v1.2.3 ./scripts/gg build windows amd64 --output-template '{name}-{version}-{os}-{arch}{ext}'
 ```
+
+`supragoflow --version --json` emits machine-readable build metadata with `schemaVersion`.
 
 ## VS Code Dev Container
 

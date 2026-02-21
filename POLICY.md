@@ -42,6 +42,7 @@ Typical gates for incremental development:
 
 - `scripts/gg` supports tunable logging with `--log-level` (`debug|info|warn|error|none`) and `--log-format` (`text|json`).
 - Each `gg` invocation includes a run correlation id (`--run-id` or auto-generated) in log messages.
+- JSON log output includes `logSchemaVersion` for compatibility-aware consumers.
 - Informational diagnostics should be bounded; avoid repeating non-actionable messages across stages.
 
 ## Builds (build image)
@@ -51,6 +52,11 @@ Typical gates for incremental development:
 - `-trimpath`
 - `CGO_ENABLED=0` by default
 - Optional semantic naming via `--output-template` with tokens `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.
+
+## Machine-readable output compatibility
+
+- `supragoflow --version --json` includes `schemaVersion`.
+- Consumers should treat `schemaVersion` changes as contract changes requiring compatibility review.
 
 ## Security library/framework selection
 
