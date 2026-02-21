@@ -84,6 +84,7 @@ The `./scripts/gg` entrypoint supports the following stages:
 | `package` | Package artifacts (create checksums) |
 | `images` | Build local Docker images |
 | `cache-prune` | Prune host cache when above configured limit |
+| `diagnose [out_dir]` | Generate bounded diagnostics bundle and compressed archive |
 | `smoke-windows [goarch]` | Run Windows binary in Wine (default: amd64) |
 
 Global `gg` logging options (place before stage): `--log-level <debug|info|warn|error|none>`, `--log-format <text|json>`, `--run-id <id>`.
@@ -96,6 +97,7 @@ Cache behavior is configurable via `SUPRAGOFLOW_CACHE_STRATEGY`:
 - `volume` (default): Docker named volumes for local iterative runs
 - `host`: bind mounts under `SUPRAGOFLOW_HOST_CACHE_ROOT` (default `.cache/supragoflow`) for CI cache restore/save compatibility
 Host cache can be bounded with `SUPRAGOFLOW_HOST_CACHE_MAX_MB` and pruned via `./scripts/gg cache-prune`.
+For failure analysis, `./scripts/gg diagnose` writes a bounded diagnostics bundle under `dist/diagnostics/`.
 
 `smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
 To enable pull-first CI image reuse from GHCR release images, set one of:

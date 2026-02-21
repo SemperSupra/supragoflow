@@ -102,6 +102,157 @@ func TestNewTLSServerConfigInvalidInput(t *testing.T) {
 	}
 }
 
+func TestTLSHandshakeBehavior(t *testing.T) {
+	caPEM, caCert, caKey, err := generateCA(t)
+	if err != nil {
+		t.Fatalf("generateCA: %v", err)
+	}
+
+	serverCertPEM, serverKeyPEM, err := generateLeafCert(t, caCert, caKey, "server.example")
+	if err != nil {
+		t.Fatalf("generateLeafCert: %v", err)
+	}
+	serverCfg, err := NewTLSServerConfig(serverCertPEM, serverKeyPEM, nil, false)
+	if err != nil {
+		t.Fatalf("NewTLSServerConfig: %v", err)
+	}
+
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", serverCfg)
+	if err != nil {
+		t.Fatalf("tls.Listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	done := make(chan struct{})
+	go func() {
+		defer close(done)
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		tlsConn := conn.(*tls.Conn)
+		_ = tlsConn.SetDeadline(time.Now().Add(3 * time.Second))
+		_ = tlsConn.Handshake()
+		_, _ = tlsConn.Write([]byte("ok"))
+		_ = conn.Close()
+	}()
+
+	clientCfg, err := NewTLSClientConfig(caPEM, "server.example", nil, nil, false)
+	if err != nil {
+		t.Fatalf("NewTLSClientConfig: %v", err)
+	}
+	clientConn, err := tls.Dial("tcp", ln.Addr().String(), clientCfg)
+	if err != nil {
+		t.Fatalf("tls.Dial should succeed: %v", err)
+	}
+	_ = clientConn.Close()
+	<-done
+
+	ln2, err := tls.Listen("tcp", "127.0.0.1:0", serverCfg)
+	if err != nil {
+		t.Fatalf("tls.Listen second: %v", err)
+	}
+	defer func() { _ = ln2.Close() }()
+	go func() {
+		conn, err := ln2.Accept()
+		if err != nil {
+			return
+		}
+		tlsConn := conn.(*tls.Conn)
+		_ = tlsConn.SetDeadline(time.Now().Add(3 * time.Second))
+		_ = tlsConn.Handshake()
+		_ = tlsConn.Close()
+	}()
+
+	badClientCfg, err := NewTLSClientConfig(caPEM, "wrong.example", nil, nil, false)
+	if err != nil {
+		t.Fatalf("NewTLSClientConfig bad host: %v", err)
+	}
+	badConn, err := tls.Dial("tcp", ln2.Addr().String(), badClientCfg)
+	if err == nil {
+		_ = badConn.Close()
+		t.Fatal("expected tls.Dial to fail for wrong ServerName")
+	}
+}
+
+func TestTLSMutualTLSHandshakeBehavior(t *testing.T) {
+	caPEM, caCert, caKey, err := generateCA(t)
+	if err != nil {
+		t.Fatalf("generateCA: %v", err)
+	}
+	serverCertPEM, serverKeyPEM, err := generateLeafCert(t, caCert, caKey, "mtls.example")
+	if err != nil {
+		t.Fatalf("generateLeafCert server: %v", err)
+	}
+	clientCertPEM, clientKeyPEM, err := generateLeafCert(t, caCert, caKey, "client.example")
+	if err != nil {
+		t.Fatalf("generateLeafCert client: %v", err)
+	}
+
+	serverCfg, err := NewTLSServerConfig(serverCertPEM, serverKeyPEM, caPEM, true)
+	if err != nil {
+		t.Fatalf("NewTLSServerConfig: %v", err)
+	}
+	ln, err := tls.Listen("tcp", "127.0.0.1:0", serverCfg)
+	if err != nil {
+		t.Fatalf("tls.Listen: %v", err)
+	}
+	defer func() { _ = ln.Close() }()
+
+	go func() {
+		conn, err := ln.Accept()
+		if err != nil {
+			return
+		}
+		tlsConn := conn.(*tls.Conn)
+		_ = tlsConn.SetDeadline(time.Now().Add(3 * time.Second))
+		_ = tlsConn.Handshake()
+		_ = tlsConn.Close()
+	}()
+
+	clientCfg, err := NewTLSClientConfig(caPEM, "mtls.example", clientCertPEM, clientKeyPEM, false)
+	if err != nil {
+		t.Fatalf("NewTLSClientConfig: %v", err)
+	}
+	conn, err := tls.Dial("tcp", ln.Addr().String(), clientCfg)
+	if err != nil {
+		t.Fatalf("expected mTLS handshake success: %v", err)
+	}
+	_ = conn.Close()
+
+	// New listener for missing client cert negative path.
+	ln2, err := tls.Listen("tcp", "127.0.0.1:0", serverCfg)
+	if err != nil {
+		t.Fatalf("tls.Listen second: %v", err)
+	}
+	defer func() { _ = ln2.Close() }()
+	handshakeErrCh := make(chan error, 1)
+	go func() {
+		conn, err := ln2.Accept()
+		if err != nil {
+			handshakeErrCh <- err
+			return
+		}
+		tlsConn := conn.(*tls.Conn)
+		_ = tlsConn.SetDeadline(time.Now().Add(3 * time.Second))
+		handshakeErrCh <- tlsConn.Handshake()
+		_ = tlsConn.Close()
+	}()
+
+	noClientCertCfg, err := NewTLSClientConfig(caPEM, "mtls.example", nil, nil, false)
+	if err != nil {
+		t.Fatalf("NewTLSClientConfig no cert: %v", err)
+	}
+	conn2, err := tls.Dial("tcp", ln2.Addr().String(), noClientCertCfg)
+	if err == nil {
+		_ = conn2.Close()
+	}
+	serverErr := <-handshakeErrCh
+	if serverErr == nil {
+		t.Fatal("expected server-side mTLS handshake failure when client cert missing")
+	}
+}
+
 func generateCA(t *testing.T) ([]byte, *x509.Certificate, *rsa.PrivateKey, error) {
 	t.Helper()
 

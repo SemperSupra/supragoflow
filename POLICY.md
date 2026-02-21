@@ -48,6 +48,7 @@ Typical gates for incremental development:
 - Long-running operations provide liveness/progress feedback with configurable heartbeat interval (`SUPRAGOFLOW_HEARTBEAT_SEC`).
 - Cache strategy is configurable (`SUPRAGOFLOW_CACHE_STRATEGY=volume|host`); CI should prefer `host` to enable cache restore/save across runs.
 - Host cache should be size-bounded in automation (`SUPRAGOFLOW_HOST_CACHE_MAX_MB`) and pruned with `gg cache-prune`.
+- `gg diagnose` should produce bounded diagnostics bundles suitable for corrective maintenance and CI triage.
 
 ## Builds (build image)
 

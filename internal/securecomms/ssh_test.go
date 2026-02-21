@@ -138,6 +138,41 @@ func TestNewSSHClientConfigInvalidInput(t *testing.T) {
 	}
 }
 
+func TestSSHHostKeyCallbackRejectsMismatchedHostKey(t *testing.T) {
+	clientKeyPEM, err := generateRSAPrivateKeyPEM()
+	if err != nil {
+		t.Fatalf("generateRSAPrivateKeyPEM: %v", err)
+	}
+	knownHostKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey known host: %v", err)
+	}
+	knownSigner, err := ssh.NewSignerFromKey(knownHostKey)
+	if err != nil {
+		t.Fatalf("ssh.NewSignerFromKey known host: %v", err)
+	}
+	knownHostsLine := knownhosts.Line([]string{"example.com"}, knownSigner.PublicKey())
+
+	cfg, err := NewSSHClientConfig("alice", clientKeyPEM, []byte(knownHostsLine+"\n"))
+	if err != nil {
+		t.Fatalf("NewSSHClientConfig: %v", err)
+	}
+
+	otherHostKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	if err != nil {
+		t.Fatalf("rsa.GenerateKey other host: %v", err)
+	}
+	otherSigner, err := ssh.NewSignerFromKey(otherHostKey)
+	if err != nil {
+		t.Fatalf("ssh.NewSignerFromKey other host: %v", err)
+	}
+
+	err = cfg.HostKeyCallback("example.com:22", &net.TCPAddr{IP: net.ParseIP("127.0.0.1"), Port: 22}, otherSigner.PublicKey())
+	if err == nil {
+		t.Fatal("expected host key callback failure for mismatched host key")
+	}
+}
+
 func generateRSAPrivateKeyPEM() ([]byte, error) {
 	key, err := rsa.GenerateKey(rand.Reader, 2048)
 	if err != nil {

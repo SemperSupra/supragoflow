@@ -7,6 +7,75 @@ import (
 	"testing"
 )
 
+func TestRunCapabilitySetTable(t *testing.T) {
+	tests := []struct {
+		name        string
+		args        []string
+		wantErr     bool
+		wantSubstrs []string
+	}{
+		{
+			name:        "usage",
+			args:        nil,
+			wantErr:     false,
+			wantSubstrs: []string{"usage: supragoflow", "subcommands:"},
+		},
+		{
+			name:        "version subcommand",
+			args:        []string{"version"},
+			wantErr:     false,
+			wantSubstrs: []string{"version=", "commit=", "date=", "builtBy="},
+		},
+		{
+			name:        "legacy version flag",
+			args:        []string{"--version"},
+			wantErr:     false,
+			wantSubstrs: []string{"version=", "commit=", "date=", "builtBy="},
+		},
+		{
+			name:        "check tls",
+			args:        []string{"check-tls"},
+			wantErr:     false,
+			wantSubstrs: []string{"Checking TLS configuration builder...", "OK: TLS client config builder initialized successfully."},
+		},
+		{
+			name:        "check ssh",
+			args:        []string{"check-ssh"},
+			wantErr:     false,
+			wantSubstrs: []string{"Checking SSH configuration builder...", "OK: SSH client config builder initialized successfully."},
+		},
+		{
+			name:        "unknown subcommand",
+			args:        []string{"nope"},
+			wantErr:     true,
+			wantSubstrs: []string{"unknown subcommand"},
+		},
+	}
+
+	for _, tc := range tests {
+		t.Run(tc.name, func(t *testing.T) {
+			var out bytes.Buffer
+			err := run(tc.args, &out)
+			if (err != nil) != tc.wantErr {
+				t.Fatalf("wantErr=%v got err=%v", tc.wantErr, err)
+			}
+
+			gotText := out.String()
+			for _, want := range tc.wantSubstrs {
+				if tc.wantErr {
+					if err == nil || !strings.Contains(err.Error(), want) {
+						t.Fatalf("expected error containing %q, got %v", want, err)
+					}
+					continue
+				}
+				if !strings.Contains(gotText, want) {
+					t.Fatalf("expected output to contain %q, got %q", want, gotText)
+				}
+			}
+		})
+	}
+}
+
 func TestRunDefaultOutput(t *testing.T) {
 	var out bytes.Buffer
 	if err := run(nil, &out); err != nil {
@@ -94,6 +163,9 @@ func TestRunVersionJSON(t *testing.T) {
 		if _, ok := payload[key]; !ok {
 			t.Fatalf("missing key %q in JSON output: %v", key, payload)
 		}
+	}
+	if len(payload) != 5 {
+		t.Fatalf("unexpected key count in JSON output: %v", payload)
 	}
 	if payload["schemaVersion"] != "1" {
 		t.Fatalf("unexpected schemaVersion %q", payload["schemaVersion"])
