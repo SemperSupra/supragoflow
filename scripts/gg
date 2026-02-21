@@ -19,6 +19,11 @@ TIMEOUT_STAGE_SEC="${SUPRAGOFLOW_TIMEOUT_STAGE_SEC:-1800}"
 TIMEOUT_PULL_SEC="${SUPRAGOFLOW_TIMEOUT_PULL_SEC:-300}"
 TIMEOUT_IMAGE_BUILD_SEC="${SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC:-1800}"
 TIMEOUT_SMOKE_SEC="${SUPRAGOFLOW_TIMEOUT_SMOKE_SEC:-600}"
+HEARTBEAT_SEC="${SUPRAGOFLOW_HEARTBEAT_SEC:-30}"
+TEST_PARALLEL="${SUPRAGOFLOW_TEST_PARALLEL:-}"
+BUILD_PARALLEL="${SUPRAGOFLOW_BUILD_PARALLEL:-}"
+DOCKER_QUIET=0
+IMAGES_READY=0
 
 BUILD_ARGS=(
   --build-arg GO_VERSION="${GO_VERSION:-1.25.7}"
@@ -45,11 +50,49 @@ CACHEVOL="${SUPRAGOFLOW_CACHEVOL:-supragoflow-gocache}"
 
 run_with_timeout() {
   local timeout_sec="$1"; shift
-  if [[ "$timeout_sec" =~ ^[0-9]+$ ]] && [[ "$timeout_sec" -gt 0 ]] && command -v timeout >/dev/null 2>&1; then
-    timeout "${timeout_sec}s" "$@"
-  else
-    "$@"
+  local desc="$1"; shift
+  local start_ts now_ts elapsed rc timed_out pid
+
+  start_ts="$(date +%s)"
+  log_msg info "starting: ${desc}"
+
+  "$@" &
+  pid=$!
+  rc=0
+  timed_out=0
+
+  while kill -0 "$pid" >/dev/null 2>&1; do
+    sleep 1
+    now_ts="$(date +%s)"
+    elapsed=$((now_ts - start_ts))
+
+    if [[ "$HEARTBEAT_SEC" =~ ^[0-9]+$ ]] && [[ "$HEARTBEAT_SEC" -gt 0 ]] && (( elapsed > 0 )) && (( elapsed % HEARTBEAT_SEC == 0 )); then
+      log_msg info "in-progress: ${desc} elapsed=${elapsed}s"
+    fi
+
+    if [[ "$timeout_sec" =~ ^[0-9]+$ ]] && [[ "$timeout_sec" -gt 0 ]] && (( elapsed >= timeout_sec )); then
+      log_msg error "timeout: ${desc} exceeded ${timeout_sec}s"
+      timed_out=1
+      kill "$pid" >/dev/null 2>&1 || true
+      break
+    fi
+  done
+
+  wait "$pid" || rc=$?
+  now_ts="$(date +%s)"
+  elapsed=$((now_ts - start_ts))
+
+  if [[ "$timed_out" -eq 1 ]]; then
+    log_msg error "failed: ${desc} duration=${elapsed}s exit=124"
+    return 124
   fi
+
+  if [[ "$rc" -eq 0 ]]; then
+    log_msg info "completed: ${desc} duration=${elapsed}s"
+  else
+    log_msg error "failed: ${desc} duration=${elapsed}s exit=${rc}"
+  fi
+  return "$rc"
 }
 
 docker_pull_with_retry() {
@@ -58,8 +101,14 @@ docker_pull_with_retry() {
   local backoff="${PULL_BACKOFF_SEC}"
   local i
   for ((i=1; i<=attempts; i++)); do
-    if run_with_timeout "$TIMEOUT_PULL_SEC" docker pull "$image_ref" >/dev/null 2>&1; then
-      return 0
+    if [[ "$DOCKER_QUIET" -eq 1 ]]; then
+      if run_with_timeout "$TIMEOUT_PULL_SEC" "docker pull ${image_ref}" docker pull -q "$image_ref"; then
+        return 0
+      fi
+    else
+      if run_with_timeout "$TIMEOUT_PULL_SEC" "docker pull ${image_ref}" docker pull "$image_ref"; then
+        return 0
+      fi
     fi
     if [[ "$i" -lt "$attempts" ]]; then
       log_msg warn "docker pull attempt ${i}/${attempts} failed for ${image_ref}; retrying in ${backoff}s"
@@ -69,6 +118,81 @@ docker_pull_with_retry() {
   return 1
 }
 
+docker_build_with_verbosity() {
+  local timeout_sec="$1"; shift
+  local desc="$1"; shift
+  if [[ "$DOCKER_QUIET" -eq 1 ]]; then
+    run_with_timeout "$timeout_sec" "$desc" docker build -q "$@"
+  else
+    run_with_timeout "$timeout_sec" "$desc" docker build "$@"
+  fi
+}
+
+ensure_images() {
+  if [[ "$IMAGES_READY" -eq 1 ]]; then
+    return
+  fi
+
+  pull_images
+
+  # Build locally if missing (incremental bring-up friendly)
+  if ! image_exists "$BUILD_IMAGE"; then
+    log_msg info "building build image: $BUILD_IMAGE"
+    docker_build_with_verbosity "$TIMEOUT_IMAGE_BUILD_SEC" "docker build ${BUILD_IMAGE}" "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+  fi
+  if ! image_exists "$DEV_IMAGE"; then
+    log_msg info "building dev image: $DEV_IMAGE"
+    docker_build_with_verbosity "$TIMEOUT_IMAGE_BUILD_SEC" "docker build ${DEV_IMAGE}" "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+  fi
+  IMAGES_READY=1
+}
+
+run_in_image() {
+  local image="$1"; shift
+  run_with_timeout "$TIMEOUT_STAGE_SEC" "docker run ${image}" docker run --rm -t     -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}"     -v "${CACHEVOL}:/go-cache"     -v "${MODVOL}:/go/pkg/mod"     -e GOCACHE=/go-cache     -e GOMODCACHE=/go/pkg/mod     -e GOPATH=/go     "$image" bash -c "$*"
+}
+
+run() {
+  local image="$1"; shift
+  if in_container; then
+    bash -c "$*"
+  else
+    ensure_images
+    run_in_image "$image" "$*"
+  fi
+}
+
+render_output_name() {
+  local template="$1"
+  local name="$2"
+  local version="$3"
+  local goos="$4"
+  local goarch="$5"
+  local ext="$6"
+
+  local rendered="$template"
+  rendered="${rendered//\{name\}/$name}"
+  rendered="${rendered//\{version\}/$version}"
+  rendered="${rendered//\{os\}/$goos}"
+  rendered="${rendered//\{arch\}/$goarch}"
+  rendered="${rendered//\{ext\}/$ext}"
+
+  if [[ "$rendered" == *"{"* || "$rendered" == *"}"* ]]; then
+    echo "invalid output template: unknown token in '$template'" >&2
+    echo "supported tokens: {name} {version} {os} {arch} {ext}" >&2
+    return 2
+  fi
+  if [[ "$rendered" == *"/"* || "$rendered" == *"\\"* ]]; then
+    echo "invalid output template: output filename must not contain path separators" >&2
+    return 2
+  fi
+  if [[ -z "$rendered" || "$rendered" == "." || "$rendered" == ".." ]]; then
+    echo "invalid output template: resolved filename is invalid" >&2
+    return 2
+  fi
+
+  printf '%s' "$rendered"
+}
 level_rank() {
   case "$1" in
     debug) echo 10 ;;
@@ -174,66 +298,6 @@ pull_images() {
   fi
 }
 
-ensure_images() {
-  pull_images
-
-  # Build locally if missing (incremental bring-up friendly)
-  if ! image_exists "$BUILD_IMAGE"; then
-    log_msg info "building build image: $BUILD_IMAGE"
-    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
-  fi
-  if ! image_exists "$DEV_IMAGE"; then
-    log_msg info "building dev image: $DEV_IMAGE"
-    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
-  fi
-}
-
-run_in_image() {
-  local image="$1"; shift
-  run_with_timeout "$TIMEOUT_STAGE_SEC" docker run --rm -t     -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}"     -v "${CACHEVOL}:/go-cache"     -v "${MODVOL}:/go/pkg/mod"     -e GOCACHE=/go-cache     -e GOMODCACHE=/go/pkg/mod     -e GOPATH=/go     "$image" bash -c "$*"
-}
-
-run() {
-  local image="$1"; shift
-  if in_container; then
-    bash -c "$*"
-  else
-    ensure_images
-    run_in_image "$image" "$*"
-  fi
-}
-
-render_output_name() {
-  local template="$1"
-  local name="$2"
-  local version="$3"
-  local goos="$4"
-  local goarch="$5"
-  local ext="$6"
-
-  local rendered="$template"
-  rendered="${rendered//\{name\}/$name}"
-  rendered="${rendered//\{version\}/$version}"
-  rendered="${rendered//\{os\}/$goos}"
-  rendered="${rendered//\{arch\}/$goarch}"
-  rendered="${rendered//\{ext\}/$ext}"
-
-  if [[ "$rendered" == *"{"* || "$rendered" == *"}"* ]]; then
-    echo "invalid output template: unknown token in '$template'" >&2
-    echo "supported tokens: {name} {version} {os} {arch} {ext}" >&2
-    return 2
-  fi
-  if [[ "$rendered" == *"/"* || "$rendered" == *"\\"* ]]; then
-    echo "invalid output template: output filename must not contain path separators" >&2
-    return 2
-  fi
-  if [[ -z "$rendered" || "$rendered" == "." || "$rendered" == ".." ]]; then
-    echo "invalid output template: resolved filename is invalid" >&2
-    return 2
-  fi
-
-  printf '%s' "$rendered"
-}
 
 stage="${1:-}"; shift || true
 
@@ -276,6 +340,11 @@ done
 
 LOG_LEVEL="$(normalize_log_level "$LOG_LEVEL")"
 LOG_FORMAT="$(normalize_log_format "$LOG_FORMAT")"
+if [[ "$LOG_LEVEL" == "debug" ]]; then
+  DOCKER_QUIET=0
+else
+  DOCKER_QUIET=1
+fi
 log_msg debug "starting gg stage='${stage:-<none>}' log_level=$LOG_LEVEL log_format=$LOG_FORMAT"
 
 case "$stage" in
@@ -292,7 +361,11 @@ case "$stage" in
     "${ROOT}/scripts/test-output-template.sh"
     ;;
   test)
-    run "$DEV_IMAGE" 'command -v gotestsum >/dev/null && gotestsum -- ./... || go test ./...'
+    if [[ -n "${TEST_PARALLEL}" ]]; then
+      run "$DEV_IMAGE" "command -v gotestsum >/dev/null && gotestsum -- -parallel ${TEST_PARALLEL} ./... || go test -parallel ${TEST_PARALLEL} ./..."
+    else
+      run "$DEV_IMAGE" 'command -v gotestsum >/dev/null && gotestsum -- ./... || go test ./...'
+    fi
     ;;
   build)
     goos="${1:-linux}"
@@ -337,7 +410,11 @@ case "$stage" in
     fi
     out="dist/${goos}-${goarch}"
     # Embed simple version info for local builds
-    run "$BUILD_IMAGE" "mkdir -p ${out} && tmp='${out}/.${artifact_name}.tmp.\$\$' && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=${build_version} -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=${build_date} -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o \"\${tmp}\" ./cmd/supragoflow && mv -f \"\${tmp}\" ${out}/${artifact_name}"
+    build_parallel_flag=""
+    if [[ -n "${BUILD_PARALLEL}" ]]; then
+      build_parallel_flag="-p ${BUILD_PARALLEL}"
+    fi
+    run "$BUILD_IMAGE" "mkdir -p ${out} && tmp='${out}/.${artifact_name}.tmp.\$\$' && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build ${build_parallel_flag} -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=${build_version} -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=${build_date} -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o \"\${tmp}\" ./cmd/supragoflow && mv -f \"\${tmp}\" ${out}/${artifact_name}"
     ;;
   package)
     run "$BUILD_IMAGE" "mkdir -p dist && cd dist && if command -v sha256sum >/dev/null; then tmp=.SHA256SUMS.tmp.\$\$; sha256sum -b */* > \"\${tmp}\" && mv -f \"\${tmp}\" SHA256SUMS; fi"
@@ -348,9 +425,9 @@ case "$stage" in
       exit 2
     fi
     log_msg info "building build image: $BUILD_IMAGE"
-    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
+    docker_build_with_verbosity "$TIMEOUT_IMAGE_BUILD_SEC" "docker build ${BUILD_IMAGE}" "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
     log_msg info "building dev image: $DEV_IMAGE"
-    run_with_timeout "$TIMEOUT_IMAGE_BUILD_SEC" docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
+    docker_build_with_verbosity "$TIMEOUT_IMAGE_BUILD_SEC" "docker build ${DEV_IMAGE}" "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
   targets)
     run "$DEV_IMAGE" 'go tool dist list'
@@ -369,7 +446,7 @@ case "$stage" in
     fi
     # Use official WineBot entrypoint with explorer supervision disabled for CLI workloads
     log_msg info "running version check (WineBot E2E)"
-    run_with_timeout "$TIMEOUT_SMOKE_SEC" docker run --rm \
+    run_with_timeout "$TIMEOUT_SMOKE_SEC" "wine smoke version-check" docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
       -e APP_ARGS="--version --json" \
@@ -378,7 +455,7 @@ case "$stage" in
       "$WINE_IMAGE"
 
     log_msg info "running tls check (WineBot E2E)"
-    run_with_timeout "$TIMEOUT_SMOKE_SEC" docker run --rm \
+    run_with_timeout "$TIMEOUT_SMOKE_SEC" "wine smoke tls-check" docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
       -e APP_ARGS="check-tls" \
@@ -387,7 +464,7 @@ case "$stage" in
       "$WINE_IMAGE"
 
     log_msg info "running ssh check (WineBot E2E)"
-    run_with_timeout "$TIMEOUT_SMOKE_SEC" docker run --rm \
+    run_with_timeout "$TIMEOUT_SMOKE_SEC" "wine smoke ssh-check" docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
       -e APP_ARGS="check-ssh" \

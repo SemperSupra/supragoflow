@@ -45,6 +45,7 @@ Typical gates for incremental development:
 - JSON log output includes `logSchemaVersion` for compatibility-aware consumers.
 - Informational diagnostics should be bounded; avoid repeating non-actionable messages across stages.
 - Timeouts and pull retry/backoff are configurable to bound long-running operations (`SUPRAGOFLOW_TIMEOUT_*`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`).
+- Long-running operations provide liveness/progress feedback with configurable heartbeat interval (`SUPRAGOFLOW_HEARTBEAT_SEC`).
 
 ## Builds (build image)
 
@@ -80,6 +81,12 @@ Typical gates for incremental development:
 - Users/agents should prefer GHCR release tags over local images.
 - `scripts/gg` only attempts remote pulls when `SUPRAGOFLOW_IMAGE_TAG` is set.
 - `gg smoke-windows` requires an explicit runner image via `SUPRAGOFLOW_WINE_RUNNER_IMAGE`.
+
+## Service discoverability
+
+- Local service discovery (Bonjour/mDNS) is not applicable to the current CLI-only architecture.
+- Internet/runtime service discovery is not applicable to the current CLI-only architecture.
+- If a network service mode is introduced in future, any discovery mechanism must be explicit opt-in and undergo security review before enablement.
 
 ## Contribution policy (Option C)
 
