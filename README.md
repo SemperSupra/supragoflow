@@ -162,6 +162,7 @@ See `CONTRIBUTING.md` and `.github/allowlist.yml`.
 
 - Security contact and disclosure process: see [SECURITY.md](SECURITY.md).
 - CI includes repository secret scanning and pinned GitHub Actions references.
+- Container images default to non-root `USER`, and `./scripts/gg` runs containerized stages with invoker UID:GID mapping to preserve host ownership.
 - Release workflow publishes SBOM assets for release images and binaries.
 
 ## Documentation Index
