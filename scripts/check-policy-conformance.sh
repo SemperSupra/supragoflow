@@ -35,5 +35,17 @@ fi
 
 grep -q "All GitHub Actions must be pinned to immutable commit SHAs" POLICY.md || fail "POLICY.md missing action pinning policy statement"
 grep -q "Release workflows publish explicit release tags only" POLICY.md || fail "POLICY.md missing explicit release tag policy statement"
+grep -q "Container images must default to non-root execution identity" POLICY.md || fail "POLICY.md missing non-root container execution identity policy statement"
+grep -Eq 'scripts/gg.*invoker UID:GID mapping' POLICY.md || fail "POLICY.md missing invoker UID:GID mapping policy statement"
+
+for dockerfile in docker/Dockerfile.build docker/Dockerfile.dev; do
+  [[ -f "${dockerfile}" ]] || fail "missing ${dockerfile}"
+  grep -Eq '^USER[[:space:]]+' "${dockerfile}" || fail "${dockerfile} missing USER directive"
+  if grep -Eq '^USER[[:space:]]+(root|0(:0)?)$' "${dockerfile}"; then
+    fail "${dockerfile} must not use root USER"
+  fi
+done
+
+grep -q -- '--user "${uid}:${gid}"' scripts/gg || fail "scripts/gg missing invoker UID:GID user mapping for container runs"
 
 echo "policy-conformance: passed"

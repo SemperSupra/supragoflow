@@ -90,6 +90,14 @@ Typical gates for incremental development:
 - CI may set repository variable `SUPRAGOFLOW_IMAGE_TAG` to a canonical release tag to enable pull-first image reuse before local fallback build.
 - `gg smoke-windows` requires an explicit runner image via `SUPRAGOFLOW_WINE_RUNNER_IMAGE`.
 
+## Container execution identity
+
+- Container images must default to non-root execution identity (`USER` must not be root).
+- `scripts/gg` must run containerized stages with invoker UID:GID mapping to preserve host artifact ownership.
+- Writable roots must be validated before/after containerized stages with `gg verify-writable`.
+- Current exception: short-lived volume-ownership preparation may run as root to align named-volume ownership before stage execution.
+- Any additional root-execution exception must be explicitly documented in-policy and time-bounded.
+
 ## CI tiering
 
 - Pull requests run a fast gate by default (format/vet/lint/test/linux build).

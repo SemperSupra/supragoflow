@@ -11,5 +11,12 @@ RUN set -eux;     case "${TARGETARCH}" in       amd64) GOARCH=amd64 ;;       arm
 
 ENV PATH="/usr/local/go/bin:${PATH}"     GOPATH="/go"     GOCACHE="/go-cache"     GOMODCACHE="/go/pkg/mod"     CGO_ENABLED=0
 
+RUN set -eux; \
+    groupadd -g 10001 supragoflow; \
+    useradd -m -u 10001 -g 10001 -s /usr/sbin/nologin supragoflow; \
+    mkdir -p /go /go-cache /work; \
+    chown -R 10001:10001 /go /go-cache /work
+
 WORKDIR /work
+USER 10001:10001
 CMD ["bash", "-lc", "go version && echo supragoflow-build ready"]
