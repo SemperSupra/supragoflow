@@ -13,3 +13,11 @@ If you need access, contact the maintainers out-of-band and include your GitHub 
 ## Project Policies
 
 Please refer to [POLICY.md](POLICY.md) for detailed policies regarding tooling, dependencies, security, and releases.
+
+## Documentation Maintenance
+
+When behavior changes, update documentation in the same PR:
+
+- `README.md` for user-facing command/flow updates.
+- `POLICY.md` for normative policy/guardrail changes.
+- `docs/operations-runbook.md` for operator/agent execution and triage workflows.

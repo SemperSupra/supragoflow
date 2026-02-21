@@ -1,11 +1,11 @@
 # STATUS
 
-Last updated: 2026-02-18
+Last updated: 2026-02-21
 
 ## Current State
 
 - Branch: `main`
-- Git status: clean (`v0.0.1` tagged and released)
+- Git status: clean
 - Latest release: `v0.0.1` (Initial release)
 
 ## Completed Work
@@ -19,6 +19,12 @@ Last updated: 2026-02-18
   - `internal/securecomms/ssh.go`
   - subcommands: `check-tls`, `check-ssh` for cross-platform validation.
 - **First Release (v0.0.1):** GHCR image publishing fixed and verified.
+- Operations/governance hardening merged (PR #48):
+  - `gg` interface contract manifest (`contracts/gg-interface.json`)
+  - Fail-fast compatibility checks for CLI/gg/log schemas
+  - Bounded diagnostics with environment redaction
+  - Fault-injection/contract/diagnose self-tests
+  - Policy conformance and writable/config CI guards
 
 ## Validation Snapshot
 
