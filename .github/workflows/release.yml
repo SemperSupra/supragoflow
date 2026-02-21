@@ -182,23 +182,36 @@ jobs:
             docker system df > "${diagnostics_dir}/docker-system-df.txt" 2>&1 || true
           }
 
-          run_or_capture() {
+          run_with_retry_or_capture() {
             local cmd="$1"
-            set +e
-            eval "${cmd}"
-            local rc="$?"
-            set -e
-            if [[ "${rc}" -ne 0 ]]; then
-              capture_failure_diagnostics "${cmd}" "${rc}"
-              return "${rc}"
-            fi
+            local attempts="${2:-3}"
+            local backoff_sec="${3:-5}"
+            local attempt
+            local rc=0
+            for attempt in $(seq 1 "${attempts}"); do
+              echo "[release][liveness] attempt ${attempt}/${attempts}: ${cmd}"
+              set +e
+              eval "${cmd}"
+              rc="$?"
+              set -e
+              if [[ "${rc}" -eq 0 ]]; then
+                return 0
+              fi
+              echo "[release][warn] attempt ${attempt}/${attempts} failed (exit=${rc})"
+              if [[ "${attempt}" -lt "${attempts}" ]]; then
+                echo "[release][liveness] retrying in ${backoff_sec}s"
+                sleep "${backoff_sec}"
+              fi
+            done
+            capture_failure_diagnostics "${cmd}" "${rc}"
+            return "${rc}"
           }
 
           echo "[release][liveness] starting SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
           echo "[release][liveness] building linux amd64 binary"
-          run_or_capture "SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build linux amd64"
+          run_with_retry_or_capture "SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build linux amd64" 3 5
           echo "[release][liveness] building windows amd64 binary"
-          run_or_capture "SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build windows amd64"
+          run_with_retry_or_capture "SUPRAGOFLOW_BUILD_VERSION=${RELEASE_TAG} ./scripts/gg build windows amd64" 3 5
           echo "[release][liveness] completed SBOM binary builds at $(date -u +%Y-%m-%dT%H:%M:%SZ)"
 
       - name: Upload release diagnostics
