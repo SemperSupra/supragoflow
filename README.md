@@ -100,6 +100,7 @@ Optional strict compatibility checks are supported with:
 Runtime bounds are configurable with env vars, including:
 `SUPRAGOFLOW_TIMEOUT_STAGE_SEC`, `SUPRAGOFLOW_TIMEOUT_PULL_SEC`, `SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC`, `SUPRAGOFLOW_TIMEOUT_SMOKE_SEC`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`.
 Liveness heartbeat interval for long operations is configurable via `SUPRAGOFLOW_HEARTBEAT_SEC` (set `0` to disable periodic in-progress logs).
+Resource telemetry in heartbeat logs is enabled by default via `SUPRAGOFLOW_HEARTBEAT_RESOURCE=1` and includes process CPU/memory plus host memory/load/disk usage; set `SUPRAGOFLOW_HEARTBEAT_RESOURCE=0` to disable resource fields.
 Cache behavior is configurable via `SUPRAGOFLOW_CACHE_STRATEGY`:
 - `volume` (default): Docker named volumes for local iterative runs
 - `host`: bind mounts under `SUPRAGOFLOW_HOST_CACHE_ROOT` (default `.cache/supragoflow`) for CI cache restore/save compatibility

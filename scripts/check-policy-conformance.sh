@@ -36,6 +36,7 @@ fi
 grep -q "All GitHub Actions must be pinned to immutable commit SHAs" POLICY.md || fail "POLICY.md missing action pinning policy statement"
 grep -q "Release workflows publish explicit release tags only" POLICY.md || fail "POLICY.md missing explicit release tag policy statement"
 grep -q "Release GHCR tags are immutable by default" POLICY.md || fail "POLICY.md missing release tag immutability policy statement"
+grep -q "Heartbeat logs should include bounded resource telemetry" POLICY.md || fail "POLICY.md missing heartbeat resource telemetry policy statement"
 grep -q "Container images must default to non-root execution identity" POLICY.md || fail "POLICY.md missing non-root container execution identity policy statement"
 grep -Eq 'scripts/gg.*invoker UID:GID mapping' POLICY.md || fail "POLICY.md missing invoker UID:GID mapping policy statement"
 
