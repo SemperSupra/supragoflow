@@ -18,7 +18,7 @@ Artifacts and issue filed:
 From SupraGoFlow repo:
 
 ```bash
-cd /home/mark/Projects/SupraGoFlow/workspace/supragoflow
+cd /home/mark/Projects/SupraGoFlow/workspace
 git pull --ff-only
 ./scripts/gg test
 ./scripts/gg build windows amd64

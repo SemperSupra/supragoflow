@@ -168,6 +168,7 @@ See `CONTRIBUTING.md` and `.github/allowlist.yml`.
 
 - [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines.
 - [POLICY.md](POLICY.md) - Project policies (tooling, security, releases).
+- [docs/operations-runbook.md](docs/operations-runbook.md) - Operational runbook for humans and agents.
 - [docs/securecomms.md](docs/securecomms.md) - Documentation for the secure communications package.
 - [docs/work-log.md](docs/work-log.md) - Detailed work logs and integration status.
 - [STATUS.md](STATUS.md) - High-level project status.
