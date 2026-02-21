@@ -90,6 +90,7 @@ When `--log-format json` is used, logs include `logSchemaVersion` and `run_id` f
 
 Runtime bounds are configurable with env vars, including:
 `SUPRAGOFLOW_TIMEOUT_STAGE_SEC`, `SUPRAGOFLOW_TIMEOUT_PULL_SEC`, `SUPRAGOFLOW_TIMEOUT_IMAGE_BUILD_SEC`, `SUPRAGOFLOW_TIMEOUT_SMOKE_SEC`, `SUPRAGOFLOW_PULL_RETRIES`, `SUPRAGOFLOW_PULL_BACKOFF_SEC`.
+Liveness heartbeat interval for long operations is configurable via `SUPRAGOFLOW_HEARTBEAT_SEC` (set `0` to disable periodic in-progress logs).
 
 `smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
 
