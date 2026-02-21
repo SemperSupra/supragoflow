@@ -243,14 +243,14 @@ jobs:
       - name: Generate SBOM (linux binary)
         uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
         with:
-          path: dist/linux-amd64/supragoflow
+          path: dist/linux-amd64
           format: spdx-json
           output-file: sbom-supragoflow-linux-amd64.spdx.json
 
       - name: Generate SBOM (windows binary)
         uses: anchore/sbom-action@28d71544de8eaf1b958d335707167c5f783590ad # v0
         with:
-          path: dist/windows-amd64/supragoflow.exe
+          path: dist/windows-amd64
           format: spdx-json
           output-file: sbom-supragoflow-windows-amd64.spdx.json
 
