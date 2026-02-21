@@ -8,6 +8,11 @@ if [ -f "${ROOT}/.versions" ]; then
   source "${ROOT}/.versions"
 fi
 
+LOG_LEVEL="${SUPRAGOFLOW_LOG_LEVEL:-info}"
+LOG_FORMAT="${SUPRAGOFLOW_LOG_FORMAT:-text}"
+RUN_ID="${SUPRAGOFLOW_RUN_ID:-$(date -u +%Y%m%dT%H%M%SZ)-$$}"
+REMOTE_PULL_DISABLED_NOTIFIED=0
+
 BUILD_ARGS=(
   --build-arg GO_VERSION="${GO_VERSION:-1.25.7}"
   --build-arg GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION:-v1.64.8}"
@@ -18,11 +23,77 @@ BUILD_ARGS=(
 
 DEV_IMAGE="${SUPRAGOFLOW_DEV_IMAGE:-supragoflow-dev:local}"
 BUILD_IMAGE="${SUPRAGOFLOW_BUILD_IMAGE:-supragoflow-build:local}"
-WINE_IMAGE="ghcr.io/mark-e-deyoung/winebot:v0.9.5-rel-runner"
+IMAGE_TAG="${SUPRAGOFLOW_IMAGE_TAG:-}"
+WINE_IMAGE="${SUPRAGOFLOW_WINE_RUNNER_IMAGE:-}"
+DEFAULT_OUTPUT_TEMPLATE="${SUPRAGOFLOW_OUTPUT_TEMPLATE:-}"
+DEFAULT_BUILD_VERSION="${SUPRAGOFLOW_BUILD_VERSION:-dev-local}"
+if [[ -z "$DEFAULT_OUTPUT_TEMPLATE" ]]; then
+  DEFAULT_OUTPUT_TEMPLATE='{name}{ext}'
+fi
 
 # Named volumes for speed (safe for humans/agents)
 MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
 CACHEVOL="${SUPRAGOFLOW_CACHEVOL:-supragoflow-gocache}"
+
+level_rank() {
+  case "$1" in
+    debug) echo 10 ;;
+    info) echo 20 ;;
+    warn) echo 30 ;;
+    error) echo 40 ;;
+    none) echo 100 ;;
+    *) echo 20 ;;
+  esac
+}
+
+should_log() {
+  local msg_level="$1"
+  [[ "$(level_rank "$msg_level")" -ge "$(level_rank "$LOG_LEVEL")" ]]
+}
+
+normalize_log_level() {
+  case "$1" in
+    debug|info|warn|error|none) echo "$1" ;;
+    *) echo "info" ;;
+  esac
+}
+
+normalize_log_format() {
+  case "$1" in
+    text|json) echo "$1" ;;
+    *) echo "text" ;;
+  esac
+}
+
+json_escape() {
+  local s="$1"
+  s="${s//\\/\\\\}"
+  s="${s//\"/\\\"}"
+  s="${s//$'\n'/\\n}"
+  s="${s//$'\r'/\\r}"
+  s="${s//$'\t'/\\t}"
+  printf '%s' "$s"
+}
+
+log_msg() {
+  local level="$1"
+  local message="$2"
+  if ! should_log "$level"; then
+    return
+  fi
+
+  local ts
+  ts="$(date -u +%Y-%m-%dT%H:%M:%SZ)"
+  if [[ "$LOG_FORMAT" == "json" ]]; then
+    printf '{"ts":"%s","run_id":"%s","component":"gg","level":"%s","msg":"%s"}\n' \
+      "$(json_escape "$ts")" \
+      "$(json_escape "$RUN_ID")" \
+      "$(json_escape "$level")" \
+      "$(json_escape "$message")" >&2
+  else
+    printf '[gg][%s][run_id=%s][%s] %s\n' "$level" "$RUN_ID" "$ts" "$message" >&2
+  fi
+}
 
 in_container() {
   [[ -f "/.dockerenv" ]] || [[ "${SUPRAGOFLOW_IN_CONTAINER:-}" == "1" ]]
@@ -34,23 +105,36 @@ image_exists() {
 
 pull_images() {
   local org="${GHCR_ORG:-SemperSupra}"
+  local tag="${IMAGE_TAG}"
   # convert org to lowercase
   org=$(echo "$org" | tr '[:upper:]' '[:lower:]')
 
-  local build_remote="ghcr.io/$org/supragoflow-build:latest"
-  local dev_remote="ghcr.io/$org/supragoflow-dev:latest"
+  if [[ -z "$tag" ]]; then
+    if [[ "$REMOTE_PULL_DISABLED_NOTIFIED" -eq 0 ]]; then
+      log_msg debug "remote image pull disabled (set SUPRAGOFLOW_IMAGE_TAG to a release tag to enable)"
+      REMOTE_PULL_DISABLED_NOTIFIED=1
+    fi
+    return
+  fi
+
+  local build_remote="ghcr.io/$org/supragoflow-build:$tag"
+  local dev_remote="ghcr.io/$org/supragoflow-dev:$tag"
 
   if ! image_exists "$BUILD_IMAGE"; then
     if docker pull "$build_remote" >/dev/null 2>&1; then
-      echo "[gg] pulled build image from $build_remote" >&2
+      log_msg info "pulled build image from $build_remote"
       docker tag "$build_remote" "$BUILD_IMAGE"
+    else
+      log_msg warn "no remote build image found at $build_remote; will build locally if needed"
     fi
   fi
 
   if ! image_exists "$DEV_IMAGE"; then
     if docker pull "$dev_remote" >/dev/null 2>&1; then
-      echo "[gg] pulled dev image from $dev_remote" >&2
+      log_msg info "pulled dev image from $dev_remote"
       docker tag "$dev_remote" "$DEV_IMAGE"
+    else
+      log_msg warn "no remote dev image found at $dev_remote; will build locally if needed"
     fi
   fi
 }
@@ -60,11 +144,11 @@ ensure_images() {
 
   # Build locally if missing (incremental bring-up friendly)
   if ! image_exists "$BUILD_IMAGE"; then
-    echo "[gg] building build image: $BUILD_IMAGE" >&2
+    log_msg info "building build image: $BUILD_IMAGE"
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
   fi
   if ! image_exists "$DEV_IMAGE"; then
-    echo "[gg] building dev image: $DEV_IMAGE" >&2
+    log_msg info "building dev image: $DEV_IMAGE"
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
   fi
 }
@@ -84,11 +168,84 @@ run() {
   fi
 }
 
+render_output_name() {
+  local template="$1"
+  local name="$2"
+  local version="$3"
+  local goos="$4"
+  local goarch="$5"
+  local ext="$6"
+
+  local rendered="$template"
+  rendered="${rendered//\{name\}/$name}"
+  rendered="${rendered//\{version\}/$version}"
+  rendered="${rendered//\{os\}/$goos}"
+  rendered="${rendered//\{arch\}/$goarch}"
+  rendered="${rendered//\{ext\}/$ext}"
+
+  if [[ "$rendered" == *"{"* || "$rendered" == *"}"* ]]; then
+    echo "invalid output template: unknown token in '$template'" >&2
+    echo "supported tokens: {name} {version} {os} {arch} {ext}" >&2
+    return 2
+  fi
+  if [[ "$rendered" == *"/"* || "$rendered" == *"\\"* ]]; then
+    echo "invalid output template: output filename must not contain path separators" >&2
+    return 2
+  fi
+  if [[ -z "$rendered" || "$rendered" == "." || "$rendered" == ".." ]]; then
+    echo "invalid output template: resolved filename is invalid" >&2
+    return 2
+  fi
+
+  printf '%s' "$rendered"
+}
+
 stage="${1:-}"; shift || true
+
+while [[ -n "$stage" && "$stage" == --* ]]; do
+  case "$stage" in
+    --log-level)
+      if [[ $# -lt 1 || -z "${1:-}" ]]; then
+        echo "missing value for --log-level" >&2
+        exit 2
+      fi
+      LOG_LEVEL="$(normalize_log_level "$1")"
+      shift
+      ;;
+    --log-format)
+      if [[ $# -lt 1 || -z "${1:-}" ]]; then
+        echo "missing value for --log-format" >&2
+        exit 2
+      fi
+      LOG_FORMAT="$(normalize_log_format "$1")"
+      shift
+      ;;
+    --run-id)
+      if [[ $# -lt 1 || -z "${1:-}" ]]; then
+        echo "missing value for --run-id" >&2
+        exit 2
+      fi
+      RUN_ID="$1"
+      shift
+      ;;
+    --help|-h)
+      stage=""
+      ;;
+    *)
+      echo "unknown global option: $stage" >&2
+      exit 2
+      ;;
+  esac
+  stage="${1:-}"; shift || true
+done
+
+LOG_LEVEL="$(normalize_log_level "$LOG_LEVEL")"
+LOG_FORMAT="$(normalize_log_format "$LOG_FORMAT")"
+log_msg debug "starting gg stage='${stage:-<none>}' log_level=$LOG_LEVEL log_format=$LOG_FORMAT"
 
 case "$stage" in
   bootstrap)
-    run "$DEV_IMAGE" 'go version && go env GOPATH GOMODCACHE GOCACHE && (command -v golangci-lint >/dev/null && golangci-lint version || true) && (command -v govulncheck >/dev/null && govulncheck -h >/dev/null || true)'
+    run "$DEV_IMAGE" 'go version && go env GOPATH GOMODCACHE GOCACHE && (command -v golangci-lint >/dev/null && golangci-lint version || true) && (command -v govulncheck >/dev/null && govulncheck -version >/dev/null 2>&1 || true)'
     ;;
   deps) run "$DEV_IMAGE" 'go mod download' ;;
   tidy) run "$DEV_IMAGE" 'go mod tidy' ;;
@@ -96,30 +253,64 @@ case "$stage" in
   vet)  run "$DEV_IMAGE" 'go vet ./...' ;;
   lint) run "$DEV_IMAGE" 'golangci-lint run' ;;
   vuln) run "$DEV_IMAGE" 'govulncheck ./...' ;;
+  self-test)
+    "${ROOT}/scripts/test-output-template.sh"
+    ;;
   test)
     run "$DEV_IMAGE" 'command -v gotestsum >/dev/null && gotestsum -- ./... || go test ./...'
     ;;
   build)
     goos="${1:-linux}"
     goarch="${2:-amd64}"
+    shift 2 || true
     name="supragoflow"
     ext=""
+    output_template="$DEFAULT_OUTPUT_TEMPLATE"
+    build_version="$DEFAULT_BUILD_VERSION"
+    print_output_name=0
     if [[ "$goos" == "windows" ]]; then ext=".exe"; fi
+
+    while [[ $# -gt 0 ]]; do
+      case "$1" in
+        --output-template)
+          if [[ $# -lt 2 || -z "${2:-}" ]]; then
+            echo "missing value for --output-template" >&2
+            exit 2
+          fi
+          output_template="$2"
+          shift 2
+          ;;
+        --print-output-name)
+          print_output_name=1
+          shift
+          ;;
+        *)
+          echo "unknown build option: $1" >&2
+          exit 2
+          ;;
+      esac
+    done
+
+    artifact_name="$(render_output_name "$output_template" "$name" "$build_version" "$goos" "$goarch" "$ext")" || exit 2
+    if [[ "$print_output_name" -eq 1 ]]; then
+      echo "$artifact_name"
+      exit 0
+    fi
     out="dist/${goos}-${goarch}"
     # Embed simple version info for local builds
-    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=dev-local -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${name}${ext} ./cmd/supragoflow"
+    run "$BUILD_IMAGE" "mkdir -p ${out} && CGO_ENABLED=0 GOOS=${goos} GOARCH=${goarch} go build -buildvcs=false -trimpath -ldflags='-s -w -X github.com/SemperSupra/supragoflow/internal/version.Version=${build_version} -X github.com/SemperSupra/supragoflow/internal/version.Commit=local -X github.com/SemperSupra/supragoflow/internal/version.Date=$(date -u +%Y-%m-%dT%H:%M:%SZ) -X github.com/SemperSupra/supragoflow/internal/version.BuiltBy=gg' -o ${out}/${artifact_name} ./cmd/supragoflow"
     ;;
   package)
     run "$BUILD_IMAGE" "mkdir -p dist && cd dist && (command -v sha256sum >/dev/null && sha256sum -b */* > SHA256SUMS || true)"
     ;;
   images)
     if in_container; then
-      echo "Refusing to build Docker images from inside a container." >&2
+      log_msg error "refusing to build Docker images from inside a container"
       exit 2
     fi
-    echo "[gg] building build image: $BUILD_IMAGE" >&2
+    log_msg info "building build image: $BUILD_IMAGE"
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.build" -t "$BUILD_IMAGE" "$ROOT"
-    echo "[gg] building dev image: $DEV_IMAGE" >&2
+    log_msg info "building dev image: $DEV_IMAGE"
     docker build "${BUILD_ARGS[@]}" -f "${ROOT}/docker/Dockerfile.dev" -t "$DEV_IMAGE" "$ROOT"
     ;;
   targets)
@@ -128,12 +319,17 @@ case "$stage" in
   smoke-windows)
     goarch="${1:-amd64}"
     exe="dist/windows-${goarch}/supragoflow.exe"
+    if [[ -z "$WINE_IMAGE" ]]; then
+      echo "SUPRAGOFLOW_WINE_RUNNER_IMAGE is required for smoke-windows (no default image is configured)." >&2
+      echo "Example: export SUPRAGOFLOW_WINE_RUNNER_IMAGE=ghcr.io/<org>/winebot:<tag>" >&2
+      exit 2
+    fi
     if [[ ! -f "$exe" ]]; then
       echo "binary not found: $exe (run 'gg build windows ${goarch}' first)" >&2
       exit 1
     fi
     # Use official WineBot entrypoint with explorer supervision disabled for CLI workloads
-    echo "[gg] running version check (WineBot E2E)..."
+    log_msg info "running version check (WineBot E2E)"
     docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
@@ -142,7 +338,7 @@ case "$stage" in
       -e WINEDEBUG=-all \
       "$WINE_IMAGE"
 
-    echo "[gg] running tls check (WineBot E2E)..."
+    log_msg info "running tls check (WineBot E2E)"
     docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
@@ -151,7 +347,7 @@ case "$stage" in
       -e WINEDEBUG=-all \
       "$WINE_IMAGE"
 
-    echo "[gg] running ssh check (WineBot E2E)..."
+    log_msg info "running ssh check (WineBot E2E)"
     docker run --rm \
       -v "$(pwd)/$exe:/apps/supragoflow.exe" \
       -e APP_EXE=/apps/supragoflow.exe \
@@ -164,6 +360,11 @@ case "$stage" in
     cat <<'USAGE'
 usage: gg <stage> [args]
 
+global options (before stage):
+  --log-level <debug|info|warn|error|none>
+  --log-format <text|json>
+  --run-id <id>
+
 stages:
   bootstrap
   deps
@@ -172,12 +373,16 @@ stages:
   vet
   lint
   vuln
+  self-test
   test
   targets
-  build <goos> <goarch>
+  build <goos> <goarch> [--output-template <template>] [--print-output-name]
   package
   images   (build local images on host)
   smoke-windows [goarch]
+
+build output template tokens:
+  {name} {version} {os} {arch} {ext}
 USAGE
     exit 2
     ;;

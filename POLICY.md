@@ -35,7 +35,14 @@ Typical gates for incremental development:
 - `gg vet`
 - `gg lint`
 - `gg vuln`
+- `gg self-test` (script-level harness checks)
 - `gg test`
+
+## Logging and diagnostics
+
+- `scripts/gg` supports tunable logging with `--log-level` (`debug|info|warn|error|none`) and `--log-format` (`text|json`).
+- Each `gg` invocation includes a run correlation id (`--run-id` or auto-generated) in log messages.
+- Informational diagnostics should be bounded; avoid repeating non-actionable messages across stages.
 
 ## Builds (build image)
 
@@ -43,6 +50,7 @@ Typical gates for incremental development:
 
 - `-trimpath`
 - `CGO_ENABLED=0` by default
+- Optional semantic naming via `--output-template` with tokens `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.
 
 ## Security library/framework selection
 
@@ -60,7 +68,10 @@ Typical gates for incremental development:
 ## Canonical releases
 
 - Container images are built and pushed to GHCR **only** on GitHub Release (`release.published`).
+- Release workflows publish explicit release tags only; `:latest` is not part of the canonical path.
 - Users/agents should prefer GHCR release tags over local images.
+- `scripts/gg` only attempts remote pulls when `SUPRAGOFLOW_IMAGE_TAG` is set.
+- `gg smoke-windows` requires an explicit runner image via `SUPRAGOFLOW_WINE_RUNNER_IMAGE`.
 
 ## Contribution policy (Option C)
 
