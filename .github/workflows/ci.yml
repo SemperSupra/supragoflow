@@ -14,8 +14,19 @@ jobs:
     timeout-minutes: 30
     env:
       GHCR_ORG: ${{ github.repository_owner }}
+      SUPRAGOFLOW_IMAGE_TAG: ${{ vars.SUPRAGOFLOW_IMAGE_TAG }}
+      SUPRAGOFLOW_CACHE_STRATEGY: host
     steps:
       - uses: actions/checkout@v4
+      - name: Restore Go build/module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/supragoflow/gocache
+            .cache/supragoflow/gomodcache
+          key: gg-cache-${{ runner.os }}-${{ hashFiles('**/go.sum', '.versions', 'docker/Dockerfile.build', 'docker/Dockerfile.dev') }}
+          restore-keys: |
+            gg-cache-${{ runner.os }}-
 
       - name: Validate output template rendering
         run: ./scripts/test-output-template.sh
@@ -54,22 +65,44 @@ jobs:
       - name: Build windows amd64
         run: ./scripts/gg build windows amd64
 
+      - name: Upload windows artifact for smoke test
+        uses: actions/upload-artifact@v4
+        with:
+          name: supragoflow-windows-amd64
+          path: dist/windows-amd64/supragoflow.exe
+          if-no-files-found: error
+
   windows_wine_smoke:
     runs-on: ubuntu-latest
     timeout-minutes: 30
     needs: gates
     env:
       GHCR_ORG: ${{ github.repository_owner }}
+      SUPRAGOFLOW_IMAGE_TAG: ${{ vars.SUPRAGOFLOW_IMAGE_TAG }}
+      SUPRAGOFLOW_CACHE_STRATEGY: host
       SUPRAGOFLOW_WINE_RUNNER_IMAGE: ${{ vars.SUPRAGOFLOW_WINE_RUNNER_IMAGE }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Restore Go build/module cache
+        uses: actions/cache@v4
+        with:
+          path: |
+            .cache/supragoflow/gocache
+            .cache/supragoflow/gomodcache
+          key: gg-cache-${{ runner.os }}-${{ hashFiles('**/go.sum', '.versions', 'docker/Dockerfile.build', 'docker/Dockerfile.dev') }}
+          restore-keys: |
+            gg-cache-${{ runner.os }}-
 
       - name: Validate smoke runner image configuration
         run: |
           test -n "${SUPRAGOFLOW_WINE_RUNNER_IMAGE}" || (echo "Set repository variable SUPRAGOFLOW_WINE_RUNNER_IMAGE to a canonical Wine runner image." >&2; exit 2)
 
-      - name: Build windows amd64
-        run: ./scripts/gg build windows amd64
+      - name: Download windows artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: supragoflow-windows-amd64
+          path: dist/windows-amd64
 
       - name: Wine smoke test
         run: ./scripts/gg smoke-windows

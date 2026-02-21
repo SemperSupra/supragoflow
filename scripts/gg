@@ -47,6 +47,8 @@ fi
 # Named volumes for speed (safe for humans/agents)
 MODVOL="${SUPRAGOFLOW_MODVOL:-supragoflow-gomodcache}"
 CACHEVOL="${SUPRAGOFLOW_CACHEVOL:-supragoflow-gocache}"
+CACHE_STRATEGY="${SUPRAGOFLOW_CACHE_STRATEGY:-volume}"
+HOST_CACHE_ROOT="${SUPRAGOFLOW_HOST_CACHE_ROOT:-${ROOT}/.cache/supragoflow}"
 
 run_with_timeout() {
   local timeout_sec="$1"; shift
@@ -149,7 +151,26 @@ ensure_images() {
 
 run_in_image() {
   local image="$1"; shift
-  run_with_timeout "$TIMEOUT_STAGE_SEC" "docker run ${image}" docker run --rm -t     -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}"     -v "${CACHEVOL}:/go-cache"     -v "${MODVOL}:/go/pkg/mod"     -e GOCACHE=/go-cache     -e GOMODCACHE=/go/pkg/mod     -e GOPATH=/go     "$image" bash -c "$*"
+  if [[ "$CACHE_STRATEGY" == "host" ]]; then
+    mkdir -p "${HOST_CACHE_ROOT}/gocache" "${HOST_CACHE_ROOT}/gomodcache"
+    run_with_timeout "$TIMEOUT_STAGE_SEC" "docker run ${image}" docker run --rm -t \
+      -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}" \
+      -v "${HOST_CACHE_ROOT}/gocache:/go-cache" \
+      -v "${HOST_CACHE_ROOT}/gomodcache:/go/pkg/mod" \
+      -e GOCACHE=/go-cache \
+      -e GOMODCACHE=/go/pkg/mod \
+      -e GOPATH=/go \
+      "$image" bash -c "$*"
+  else
+    run_with_timeout "$TIMEOUT_STAGE_SEC" "docker run ${image}" docker run --rm -t \
+      -v "${ROOT}:${WORKDIR}" -w "${WORKDIR}" \
+      -v "${CACHEVOL}:/go-cache" \
+      -v "${MODVOL}:/go/pkg/mod" \
+      -e GOCACHE=/go-cache \
+      -e GOMODCACHE=/go/pkg/mod \
+      -e GOPATH=/go \
+      "$image" bash -c "$*"
+  fi
 }
 
 run() {
