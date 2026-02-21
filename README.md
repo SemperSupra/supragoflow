@@ -10,6 +10,11 @@ It provides a **single lifecycle entrypoint** (`./scripts/gg`) that works for:
 
 Targets: **Linux + Windows** (cross-compile). No GUI and no heavy CGO.
 
+## Repository location note
+
+This project lives in the current directory, but the Git repository root is `workspace/`.
+Keep local artifacts in the parent project directory (outside `workspace/`) so they do not get committed.
+
 ## Secure comms package
 
 This repo now includes `internal/securecomms` with proven primitives for secure channel development:
@@ -31,7 +36,8 @@ Images published on release:
 - `ghcr.io/<org>/supragoflow-build:<tag>`
 - `ghcr.io/<org>/supragoflow-dev:<tag>`
 
-> Containers are built and pushed **only on GitHub Releases**.
+> Containers are built and pushed **only on GitHub Releases** and only as explicit release tags (no implicit `:latest` flow).
+> To pull release images in `gg`, set `SUPRAGOFLOW_IMAGE_TAG=<release-tag>`.
 
 ## Two images
 
@@ -71,12 +77,24 @@ The `./scripts/gg` entrypoint supports the following stages:
 | `vet` | Run static analysis (`go vet`) |
 | `lint` | Run linter (`golangci-lint`) |
 | `vuln` | Run vulnerability check (`govulncheck`) |
+| `self-test` | Run local shell-level harness checks (non-Docker) |
 | `test` | Run tests |
 | `targets` | List supported build targets |
-| `build <goos> <goarch>` | Build binary for target OS/Arch |
+| `build <goos> <goarch> [--output-template <template>]` | Build binary for target OS/Arch |
 | `package` | Package artifacts (create checksums) |
 | `images` | Build local Docker images |
 | `smoke-windows [goarch]` | Run Windows binary in Wine (default: amd64) |
+
+Global `gg` logging options (place before stage): `--log-level <debug|info|warn|error|none>`, `--log-format <text|json>`, `--run-id <id>`.
+
+`smoke-windows` requires `SUPRAGOFLOW_WINE_RUNNER_IMAGE` to be set explicitly.
+
+`build` supports semantic artifact naming templates with tokens: `{name}`, `{version}`, `{os}`, `{arch}`, `{ext}`.
+Example:
+
+```bash
+SUPRAGOFLOW_BUILD_VERSION=v1.2.3 ./scripts/gg build windows amd64 --output-template '{name}-{version}-{os}-{arch}{ext}'
+```
 
 ## VS Code Dev Container
 

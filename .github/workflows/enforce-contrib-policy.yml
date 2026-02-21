@@ -31,14 +31,22 @@ jobs:
             const { data: content } = await github.rest.repos.getContent({ owner, repo, path, ref: baseRef });
             const yamlText = Buffer.from(content.content, content.encoding).toString("utf8");
 
+            function escapeRegex(s) {
+              return s.replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+            }
+
             function parseList(section) {
               // section: (start at "section:" line, include subsequent "- item" indented lines)
+              const sectionPattern = new RegExp(`^\\s*${escapeRegex(section)}:\\s*$`, "m");
+              if (!sectionPattern.test(yamlText)) {
+                throw new Error(`allowlist parse error: missing section '${section}'`);
+              }
               const lines = yamlText.split(/\r?\n/);
               let inSection = false;
               const out = [];
               for (const line of lines) {
                 if (!inSection) {
-                  if (new RegExp(`^${section}:\s*$`).test(line.trimEnd())) inSection = true;
+                  if (new RegExp(`^\\s*${escapeRegex(section)}:\\s*$`).test(line.trimEnd())) inSection = true;
                   continue;
                 }
                 if (/^\S/.test(line) && !line.startsWith("  -") && !line.startsWith("-")) break; // next top-level key
@@ -49,7 +57,7 @@ jobs:
             }
 
             function parseBool(key, defVal) {
-              const m = yamlText.match(new RegExp(`^\s*${key}:\s*(true|false)\s*$`, "m"));
+              const m = yamlText.match(new RegExp(`^\\s*${escapeRegex(key)}:\\s*(true|false)\\s*$`, "m"));
               return m ? (m[1] === "true") : defVal;
             }
 
@@ -67,6 +75,15 @@ jobs:
 
             const allowlisted = new Set([...humans, ...agents]);
             const forkDesignates = new Set(designatedFork);
+
+            if (!yamlText.trim()) {
+              throw new Error("allowlist parse error: allowlist.yml is empty");
+            }
+            console.log(`[allowlist] humans=${humans.length} agents=${agents.length} designated_fork_contributors=${designatedFork.length}`);
+            console.log(`[allowlist] policy=${JSON.stringify(policy)}`);
+            if (humans.length === 0 && agents.length === 0 && designatedFork.length === 0) {
+              console.warn("[allowlist] warning: all allowlist sections are empty");
+            }
 
             async function isOrgMember() {
               if (!policy.allow_org_members) return false;

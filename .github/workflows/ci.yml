@@ -16,6 +16,9 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - name: Validate output template rendering
+        run: ./scripts/test-output-template.sh
+
       - name: Bootstrap
         run: ./scripts/gg bootstrap
 
@@ -55,8 +58,13 @@ jobs:
     needs: gates
     env:
       GHCR_ORG: ${{ github.repository_owner }}
+      SUPRAGOFLOW_WINE_RUNNER_IMAGE: ${{ vars.SUPRAGOFLOW_WINE_RUNNER_IMAGE }}
     steps:
       - uses: actions/checkout@v4
+
+      - name: Validate smoke runner image configuration
+        run: |
+          test -n "${SUPRAGOFLOW_WINE_RUNNER_IMAGE}" || (echo "Set repository variable SUPRAGOFLOW_WINE_RUNNER_IMAGE to a canonical Wine runner image." >&2; exit 2)
 
       - name: Build windows amd64
         run: ./scripts/gg build windows amd64
