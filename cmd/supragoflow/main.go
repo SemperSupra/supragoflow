@@ -6,66 +6,71 @@ import (
 	"crypto/x509"
 	"encoding/json"
 	"encoding/pem"
-	"flag"
 	"fmt"
-	"io"
 	"os"
 
 	"github.com/SemperSupra/supragoflow/internal/securecomms"
 	"github.com/SemperSupra/supragoflow/internal/version"
+	"github.com/spf13/cobra"
 	"golang.org/x/crypto/ssh"
 )
 
+var (
+	jsonOutput bool
+	// We handle --version legacy flag via the root command's PreRun or similar, or just a custom flag.
+	rootVersionFlag bool
+)
+
 func main() {
-	if err := run(os.Args[1:], os.Stdout); err != nil {
-		fmt.Fprintln(os.Stderr, err)
+	if err := newRootCmd().Execute(); err != nil {
 		os.Exit(2)
 	}
 }
 
-func run(args []string, out io.Writer) error {
-	if len(args) == 0 {
-		return printUsage(out)
+func newRootCmd() *cobra.Command {
+	rootCmd := &cobra.Command{
+		Use:   "supragoflow",
+		Short: "SupraGoFlow CLI",
+		RunE: func(cmd *cobra.Command, args []string) error {
+			if rootVersionFlag {
+				return handleVersion(cmd, args)
+			}
+			return cmd.Help()
+		},
+	}
+	rootCmd.Flags().BoolVarP(&rootVersionFlag, "version", "v", false, "print version info")
+	// The original flag could be --json, but it was on the 'version' subcommand.
+	// For --version --json we can add a persistent or local json flag.
+	rootCmd.Flags().BoolVar(&jsonOutput, "json", false, "print version info as JSON")
+
+	versionCmd := &cobra.Command{
+		Use:   "version",
+		Short: "Print version info",
+		RunE:  handleVersion,
+	}
+	versionCmd.Flags().BoolVar(&jsonOutput, "json", false, "print version info as JSON")
+
+	checkTLSCmd := &cobra.Command{
+		Use:   "check-tls",
+		Short: "Validate TLS configuration builder",
+		RunE:  handleCheckTLS,
 	}
 
-	// Handle legacy flags for backward compatibility and smoke tests
-	if args[0] == "--version" || args[0] == "-version" {
-		return handleVersion(args, out)
+	checkSSHCmd := &cobra.Command{
+		Use:   "check-ssh",
+		Short: "Validate SSH configuration builder",
+		RunE:  handleCheckSSH,
 	}
 
-	subcommand := args[0]
-	subArgs := args[1:]
-
-	switch subcommand {
-	case "version":
-		return handleVersion(subArgs, out)
-	case "check-tls":
-		return handleCheckTLS(subArgs, out)
-	case "check-ssh":
-		return handleCheckSSH(subArgs, out)
-	default:
-		return fmt.Errorf("unknown subcommand: %s", subcommand)
-	}
+	rootCmd.AddCommand(versionCmd, checkTLSCmd, checkSSHCmd)
+	rootCmd.SetOut(os.Stdout)
+	rootCmd.SetErr(os.Stderr)
+	return rootCmd
 }
 
-func printUsage(out io.Writer) error {
-	_, err := fmt.Fprintln(out, "usage: supragoflow <subcommand> [flags]\n\nsubcommands:\n  version    Print version info\n  check-tls  Validate TLS configuration builder\n  check-ssh  Validate SSH configuration builder")
-	return err
-}
-
-func handleVersion(args []string, out io.Writer) error {
-	var asJSON bool
-	fs := flag.NewFlagSet("version", flag.ContinueOnError)
-	fs.SetOutput(io.Discard)
-	fs.BoolVar(&asJSON, "json", false, "print version info as JSON")
-	// If called with --version (legacy), we need to skip the first arg if it's "version"
-	if len(args) > 0 && (args[0] == "version" || args[0] == "--version" || args[0] == "-version") {
-		_ = fs.Parse(args[1:])
-	} else {
-		_ = fs.Parse(args)
-	}
-
-	if asJSON {
+func handleVersion(cmd *cobra.Command, args []string) error {
+	out := cmd.OutOrStdout()
+	if jsonOutput {
 		if expected := os.Getenv("SUPRAGOFLOW_EXPECT_SCHEMA_VERSION"); expected != "" && expected != version.SchemaVersion {
 			return fmt.Errorf(
 				"schema compatibility mismatch: expected schemaVersion=%s actual=%s; update consumer expectations or binary version",
@@ -82,10 +87,9 @@ func handleVersion(args []string, out io.Writer) error {
 	return err
 }
 
-func handleCheckTLS(args []string, out io.Writer) error {
+func handleCheckTLS(cmd *cobra.Command, args []string) error {
+	out := cmd.OutOrStdout()
 	_, _ = fmt.Fprintln(out, "Checking TLS configuration builder...")
-	// Minimal check: can we build a config without crashing/failing on provider init?
-	// We use dummy data that is syntactically valid PEM where possible.
 	_, err := securecomms.NewTLSClientConfig(nil, "example.com", nil, nil, true)
 	if err != nil {
 		return fmt.Errorf("TLS client config failed: %w", err)
@@ -94,7 +98,8 @@ func handleCheckTLS(args []string, out io.Writer) error {
 	return nil
 }
 
-func handleCheckSSH(args []string, out io.Writer) error {
+func handleCheckSSH(cmd *cobra.Command, args []string) error {
+	out := cmd.OutOrStdout()
 	_, _ = fmt.Fprintln(out, "Checking SSH configuration builder...")
 	privateKeyPEM, knownHostsData, err := generateSmokeSSHMaterial()
 	if err != nil {
