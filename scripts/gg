@@ -32,6 +32,8 @@ BUILD_ARGS=(
   --build-arg GOLANGCI_LINT_VERSION="${GOLANGCI_LINT_VERSION:-v1.64.8}"
   --build-arg GOVULNCHECK_VERSION="${GOVULNCHECK_VERSION:-v1.1.4}"
   --build-arg GOTESTSUM_VERSION="${GOTESTSUM_VERSION:-v1.13.0}"
+  --build-arg AIR_VERSION="${AIR_VERSION:-v1.61.5}"
+  --build-arg GORELEASER_VERSION="${GORELEASER_VERSION:-v2.7.0}"
   --build-arg DEBIAN_BASE="${DEBIAN_BASE:-debian:trixie-slim}"
 )
 
@@ -455,6 +457,7 @@ case "$stage" in
   vet)  run "$DEV_IMAGE" 'go vet ./...' ;;
   lint) run "$DEV_IMAGE" 'golangci-lint run' ;;
   vuln) run "$DEV_IMAGE" 'govulncheck ./...' ;;
+  live) run "$DEV_IMAGE" 'command -v air >/dev/null && air || (echo "air not found, please rebuild dev image" >&2; exit 1)' ;;
   self-test)
     "${ROOT}/scripts/test-output-template.sh"
     "${ROOT}/scripts/test-gg-contract.sh"
@@ -520,6 +523,9 @@ case "$stage" in
     ;;
   package)
     run "$BUILD_IMAGE" "mkdir -p dist && cd dist && if command -v sha256sum >/dev/null; then tmp=.SHA256SUMS.tmp.\$\$; sha256sum -b */* > \"\${tmp}\" && mv -f \"\${tmp}\" SHA256SUMS; fi"
+    ;;
+  release)
+    run "$BUILD_IMAGE" "goreleaser release --snapshot --clean"
     ;;
   images)
     if in_container; then
@@ -706,6 +712,7 @@ stages:
   vet
   lint
   vuln
+  live
   self-test
   test
   contract
@@ -714,6 +721,7 @@ stages:
   targets
   build <goos> <goarch> [--output-template <template>] [--print-output-name]
   package
+  release  (build with goreleaser snapshot)
   images   (build local images on host)
   cache-prune (prune host cache when above SUPRAGOFLOW_HOST_CACHE_MAX_MB)
   diagnose [out_dir] (write bounded diagnostics bundle and .tar.gz)

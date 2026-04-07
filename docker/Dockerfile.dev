@@ -6,6 +6,7 @@ ARG GO_VERSION=1.25.7
 ARG GOLANGCI_LINT_VERSION=v1.64.8
 ARG GOVULNCHECK_VERSION=v1.1.4
 ARG GOTESTSUM_VERSION=v1.13.0
+ARG AIR_VERSION=v1.61.5
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends       ca-certificates git wget bash jq     && rm -rf /var/lib/apt/lists/*
@@ -28,6 +29,9 @@ RUN set -eux;     go install golang.org/x/vuln/cmd/govulncheck@${GOVULNCHECK_VER
 
 # Optional nicer test output (pinned)
 RUN set -eux;     go install gotest.tools/gotestsum@${GOTESTSUM_VERSION};     gotestsum --version >/dev/null || true
+
+# Install air for live reloading
+RUN set -eux;     go install github.com/air-verse/air@${AIR_VERSION};     air -v >/dev/null || true
 
 WORKDIR /work
 USER 10001:10001

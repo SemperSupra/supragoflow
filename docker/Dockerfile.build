@@ -3,6 +3,7 @@ ARG DEBIAN_BASE=debian:trixie-slim
 FROM ${DEBIAN_BASE}
 
 ARG GO_VERSION=1.25.7
+ARG GORELEASER_VERSION=v2.7.0
 ARG TARGETARCH
 
 RUN apt-get update && apt-get install -y --no-install-recommends       ca-certificates git wget bash     && rm -rf /var/lib/apt/lists/*
@@ -17,6 +18,8 @@ RUN set -eux; \
     mkdir -p /go /go-cache /work; \
     chown -R 10001:10001 /go /go-cache /work
 
+RUN set -eux;     go install github.com/goreleaser/goreleaser/v2@${GORELEASER_VERSION};     goreleaser --version >/dev/null || true
+
 WORKDIR /work
 USER 10001:10001
-CMD ["bash", "-lc", "go version && echo supragoflow-build ready"]
+CMD ["bash", "-lc", "go version && goreleaser --version && echo supragoflow-build ready"]

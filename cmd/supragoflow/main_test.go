@@ -7,6 +7,14 @@ import (
 	"testing"
 )
 
+func runCmd(args []string, out *bytes.Buffer) error {
+	cmd := newRootCmd()
+	cmd.SetArgs(args)
+	cmd.SetOut(out)
+	cmd.SetErr(out)
+	return cmd.Execute()
+}
+
 func TestRunCapabilitySetTable(t *testing.T) {
 	tests := []struct {
 		name        string
@@ -18,7 +26,7 @@ func TestRunCapabilitySetTable(t *testing.T) {
 			name:        "usage",
 			args:        nil,
 			wantErr:     false,
-			wantSubstrs: []string{"usage: supragoflow", "subcommands:"},
+			wantSubstrs: []string{"Usage:", "Available Commands:"},
 		},
 		{
 			name:        "version subcommand",
@@ -48,14 +56,14 @@ func TestRunCapabilitySetTable(t *testing.T) {
 			name:        "unknown subcommand",
 			args:        []string{"nope"},
 			wantErr:     true,
-			wantSubstrs: []string{"unknown subcommand"},
+			wantSubstrs: []string{"unknown command \"nope\""},
 		},
 	}
 
 	for _, tc := range tests {
 		t.Run(tc.name, func(t *testing.T) {
 			var out bytes.Buffer
-			err := run(tc.args, &out)
+			err := runCmd(tc.args, &out)
 			if (err != nil) != tc.wantErr {
 				t.Fatalf("wantErr=%v got err=%v", tc.wantErr, err)
 			}
@@ -78,19 +86,19 @@ func TestRunCapabilitySetTable(t *testing.T) {
 
 func TestRunDefaultOutput(t *testing.T) {
 	var out bytes.Buffer
-	if err := run(nil, &out); err != nil {
+	if err := runCmd(nil, &out); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
 	got := out.String()
-	if !strings.Contains(got, "usage: supragoflow") {
+	if !strings.Contains(got, "Usage:") {
 		t.Fatalf("unexpected output: %q", got)
 	}
 }
 
 func TestRunVersionSubcommand(t *testing.T) {
 	var out bytes.Buffer
-	if err := run([]string{"version"}, &out); err != nil {
+	if err := runCmd([]string{"version"}, &out); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -102,7 +110,7 @@ func TestRunVersionSubcommand(t *testing.T) {
 
 func TestRunCheckTLS(t *testing.T) {
 	var out bytes.Buffer
-	if err := run([]string{"check-tls"}, &out); err != nil {
+	if err := runCmd([]string{"check-tls"}, &out); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -114,7 +122,7 @@ func TestRunCheckTLS(t *testing.T) {
 
 func TestRunCheckSSH(t *testing.T) {
 	var out bytes.Buffer
-	if err := run([]string{"check-ssh"}, &out); err != nil {
+	if err := runCmd([]string{"check-ssh"}, &out); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -126,18 +134,18 @@ func TestRunCheckSSH(t *testing.T) {
 
 func TestRunUnknownSubcommand(t *testing.T) {
 	var out bytes.Buffer
-	err := run([]string{"unknown-subcommand"}, &out)
+	err := runCmd([]string{"unknown-subcommand"}, &out)
 	if err == nil {
 		t.Fatal("expected error for unknown subcommand")
 	}
-	if !strings.Contains(err.Error(), "unknown subcommand") {
+	if !strings.Contains(err.Error(), "unknown command") {
 		t.Fatalf("unexpected error: %v", err)
 	}
 }
 
 func TestRunVersionText(t *testing.T) {
 	var out bytes.Buffer
-	if err := run([]string{"--version"}, &out); err != nil {
+	if err := runCmd([]string{"--version"}, &out); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -151,7 +159,7 @@ func TestRunVersionText(t *testing.T) {
 
 func TestRunVersionJSON(t *testing.T) {
 	var out bytes.Buffer
-	if err := run([]string{"--version", "--json"}, &out); err != nil {
+	if err := runCmd([]string{"--version", "--json"}, &out); err != nil {
 		t.Fatalf("run returned error: %v", err)
 	}
 
@@ -175,7 +183,7 @@ func TestRunVersionJSON(t *testing.T) {
 func TestRunVersionJSONSchemaExpectationMatch(t *testing.T) {
 	t.Setenv("SUPRAGOFLOW_EXPECT_SCHEMA_VERSION", "1")
 	var out bytes.Buffer
-	if err := run([]string{"--version", "--json"}, &out); err != nil {
+	if err := runCmd([]string{"--version", "--json"}, &out); err != nil {
 		t.Fatalf("run returned error with matching schema expectation: %v", err)
 	}
 }
@@ -183,7 +191,7 @@ func TestRunVersionJSONSchemaExpectationMatch(t *testing.T) {
 func TestRunVersionJSONSchemaExpectationMismatch(t *testing.T) {
 	t.Setenv("SUPRAGOFLOW_EXPECT_SCHEMA_VERSION", "999")
 	var out bytes.Buffer
-	err := run([]string{"--version", "--json"}, &out)
+	err := runCmd([]string{"--version", "--json"}, &out)
 	if err == nil {
 		t.Fatal("expected error for schema mismatch")
 	}
