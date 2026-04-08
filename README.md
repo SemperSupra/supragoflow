@@ -12,8 +12,8 @@ Targets: **Linux + Windows** (cross-compile). No GUI and no heavy CGO.
 
 ## Repository location note
 
-This project lives in the current directory, but the Git repository root is `workspace/`.
-Keep local artifacts in the parent project directory (outside `workspace/`) so they do not get committed.
+This project lives in the repository root directory.
+Keep local scratch artifacts outside the project directory so they do not get committed.
 
 ## Secure comms package
 
