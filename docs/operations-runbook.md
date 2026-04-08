@@ -4,12 +4,10 @@ This runbook is the fast path for humans and agents operating SupraGoFlow.
 
 ## Repository Root
 
-The Git repository root is:
+The Git repository root is the directory containing this project (often cloned as `supragoflow`).
 
-`/home/mark/Projects/SupraGoFlow/workspace`
-
-Run all `git` and `./scripts/gg` commands from `workspace/`.
-Keep local scratch artifacts in the parent project directory so they are not committed.
+Run all `git` and `./scripts/gg` commands from the repository root directory.
+Keep local scratch artifacts outside the project directory so they are not committed.
 
 ## Standard Lifecycle
 

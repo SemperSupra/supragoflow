@@ -20,9 +20,9 @@ The project's application dependencies are largely up-to-date with minimal actio
 
 | Tool | Previous State | Recommended Action | Tradeoffs/Implications |
 | :--- | :--- | :--- | :--- |
-| `govulncheck` | `@latest` | **Pin to `v1.1.4`** | **Tradeoff:** Requires manual updates in the future. **Implication:** Ensures reproducible builds and prevents CI breakage if a new version introduces breaking changes or bugs. |
-| `gotestsum` | `@latest` | **Pin to `v1.13.0`** | **Tradeoff:** Requires manual updates. **Implication:** Ensures consistent test output formatting and behavior across environments. |
-| `golangci-lint` | `v2.9.0` | **Monitor** | Current version is pinned. Monitor for future releases to enable new linters. |
+| `govulncheck` | `@latest` | **Pinned to `v1.1.4`** | **Tradeoff:** Requires manual updates in the future. **Implication:** Ensures reproducible builds and prevents CI breakage if a new version introduces breaking changes or bugs. |
+| `gotestsum` | `@latest` | **Pinned to `v1.13.0`** | **Tradeoff:** Requires manual updates. **Implication:** Ensures consistent test output formatting and behavior across environments. |
+| `golangci-lint` | `v2.9.0` | **Monitor** | Current version is pinned in `.versions`. Monitor for future releases to enable new linters. |
 
 ## Upgrade Strategy
 

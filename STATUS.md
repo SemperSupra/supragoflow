@@ -6,7 +6,7 @@ Last updated: 2026-02-21
 
 - Branch: `main`
 - Git status: clean
-- Latest release: `v0.0.1` (Initial release)
+- Latest release: `v0.0.2` (Published)
 
 ## Completed Work
 
@@ -14,26 +14,32 @@ Last updated: 2026-02-21
 - `./scripts/gg` lifecycle working for local dev and CI usage.
 - Windows Wine smoke job verified using official WineBot entrypoint.
 - Security/tooling policy updates added.
-- New secure comms package added and integrated into CLI:
-  - `internal/securecomms/tls.go`
-  - `internal/securecomms/ssh.go`
-  - subcommands: `check-tls`, `check-ssh` for cross-platform validation.
+- New secure comms package added and integrated into CLI.
 - **First Release (v0.0.1):** GHCR image publishing fixed and verified.
-- Operations/governance hardening merged (PR #48):
-  - `gg` interface contract manifest (`contracts/gg-interface.json`)
-  - Fail-fast compatibility checks for CLI/gg/log schemas
-  - Bounded diagnostics with environment redaction
-  - Fault-injection/contract/diagnose self-tests
-  - Policy conformance and writable/config CI guards
+- Operations/governance hardening merged (PR #48).
+- Docs refresh and operational runbook (PR #49).
+- Governance policy for non-root container execution identity (Issue #50, PR #51).
+- Status tracking and readiness record (PR #52).
+- Release immutability safeguard implementation (Issue #21, PR #53).
+- **Release (v0.0.2):** Created and published.
+
+## Notable Capability Changes Since v0.0.1
+
+- `gg` interface contract manifest and compatibility checks for CLI/gg/log schemas.
+- Bounded diagnostics with redaction and improved fault-injection self-tests.
+- Writable-root validation and policy-conformance gates in CI.
+- Non-root container execution policy and enforcement.
+- GHCR release tag immutability safeguards with explicit override path.
 
 ## Validation Snapshot
 
 Verified locally & in CI:
 
-- `./scripts/gg fmt`, `gg vet`, `gg lint`, `gg vuln`, `gg test` (Passed)
+- `./scripts/check-policy-conformance.sh` (Passed)
+- `./scripts/gg fmt`, `gg vet`, `gg lint`, `gg vuln`, `gg test`, `gg self-test` (Passed)
 - `./scripts/gg build linux amd64`, `gg build windows amd64` (Passed)
 - `./scripts/gg smoke-windows` (WineBot E2E flow verified)
-- GHCR Images: `supragoflow-build`, `supragoflow-dev` (Published v0.0.1/latest)
+- GHCR Images: `supragoflow-build`, `supragoflow-dev` (Published v0.0.2)
 
 ## Known External Dependency / Blocker
 
