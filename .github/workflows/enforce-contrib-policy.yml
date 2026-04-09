@@ -15,10 +15,20 @@ jobs:
   enforce:
     runs-on: ubuntu-latest
     steps:
+      - name: Cache npm dependencies
+        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
+        with:
+          path: node_modules
+          key: ${{ runner.os }}-npm-js-yaml-v1
+
       - name: Install js-yaml
-        run: npm install js-yaml
+        run: |
+          if [ ! -d "node_modules/js-yaml" ]; then
+            npm install js-yaml
+          fi
 
       - name: Enforce policy
+
         uses: actions/github-script@f28e40c7f34bde8b3046d885e986cb6290c5673b # v7
         with:
           script: |

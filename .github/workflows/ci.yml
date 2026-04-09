@@ -35,9 +35,10 @@ jobs:
           path: |
             .cache/supragoflow/gocache
             .cache/supragoflow/gomodcache
-          key: gg-cache-${{ runner.os }}-${{ hashFiles('**/go.sum', '.versions', 'docker/Dockerfile.build', 'docker/Dockerfile.dev') }}
+          key: gg-cache-v1-${{ runner.os }}-${{ hashFiles('**/go.sum', '.versions', 'docker/Dockerfile.build', 'docker/Dockerfile.dev') }}-${{ github.run_id }}
           restore-keys: |
-            gg-cache-${{ runner.os }}-
+            gg-cache-v1-${{ runner.os }}-${{ hashFiles('**/go.sum', '.versions', 'docker/Dockerfile.build', 'docker/Dockerfile.dev') }}-
+            gg-cache-v1-${{ runner.os }}-
 
       - name: Secret scan
         run: |
@@ -69,8 +70,7 @@ jobs:
       - name: Lint
         run: ./scripts/gg lint
 
-      - name: Vulnerability check (main only)
-        if: github.event_name == 'push' && github.ref == 'refs/heads/main'
+      - name: Vulnerability check
         run: ./scripts/gg vuln
 
       - name: Test
@@ -114,16 +114,6 @@ jobs:
     steps:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
 
-      - name: Restore Go build/module cache
-        uses: actions/cache@0057852bfaa89a56745cba8c7296529d2fc39830 # v4
-        with:
-          path: |
-            .cache/supragoflow/gocache
-            .cache/supragoflow/gomodcache
-          key: gg-cache-${{ runner.os }}-${{ hashFiles('**/go.sum', '.versions', 'docker/Dockerfile.build', 'docker/Dockerfile.dev') }}
-          restore-keys: |
-            gg-cache-${{ runner.os }}-
-
       - name: Validate smoke runner image configuration
         run: |
           test -n "${SUPRAGOFLOW_WINE_RUNNER_IMAGE}" || (echo "Set repository variable SUPRAGOFLOW_WINE_RUNNER_IMAGE to a canonical Wine runner image." >&2; exit 2)
@@ -137,10 +127,7 @@ jobs:
       - name: Wine smoke test
         run: ./scripts/gg smoke-windows
 
-      - name: Prune host cache to configured limit
-        if: always()
-        run: ./scripts/gg cache-prune
-
       - name: Verify writable roots (post-smoke)
         if: always()
         run: ./scripts/gg verify-writable
+
