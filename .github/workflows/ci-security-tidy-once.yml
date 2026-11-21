@@ -1,0 +1,44 @@
+name: One-shot public dependency integrity receipt
+
+on:
+  pull_request:
+    paths:
+      - ".versions"
+      - "docker/**"
+      - "go.mod"
+      - "go.sum"
+      - ".github/workflows/ci-security-tidy-once.yml"
+  push:
+    branches: [ "fix/issue-604-go-toolchain-security" ]
+
+permissions:
+  contents: read
+
+jobs:
+  tidy-and-verify:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version: '1.25.13'
+          cache: false
+      - name: Reconcile public module integrity
+        run: |
+          go version
+          go mod tidy
+          go mod verify
+          test -s go.sum
+          sha256sum go.mod go.sum
+      - name: Upload canonical public module graph (no credentials)
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: public-go-module-integrity-${{ github.sha }}
+          path: |
+            go.mod
+            go.sum
+          if-no-files-found: error
+          retention-days: 3
