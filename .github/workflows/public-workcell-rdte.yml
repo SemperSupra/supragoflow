@@ -1,0 +1,120 @@
+name: Public synthetic stateless workcell RDTE
+
+on:
+  pull_request:
+    paths:
+      - "rdte/public-workcell/**"
+      - ".github/workflows/public-workcell-rdte.yml"
+  push:
+    branches:
+      - "agent/public-workcell-rdte-*"
+    paths:
+      - "rdte/public-workcell/**"
+      - ".github/workflows/public-workcell-rdte.yml"
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-workcell-rdte-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux-contract-and-build:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: rdte/public-workcell
+        shell: bash
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Go environment
+        run: go version
+      - name: Native race and negative tests
+        env:
+          GOTOOLCHAIN: local
+        run: go test -count=1 -race ./...
+      - name: Go vet
+        run: go vet ./...
+      - name: Synthetic full lifecycle and cleanup
+        run: |
+          go run ./cmd/workcell-rdte exercise > /tmp/public-workcell-rdte.json
+          grep -q '"destroy_verified": true' /tmp/public-workcell-rdte.json
+          grep -q '"provider_effects": "NONE"' /tmp/public-workcell-rdte.json
+          cat /tmp/public-workcell-rdte.json
+      - name: Deterministic multi-architecture binaries
+        run: |
+          mkdir -p dist
+          for target in linux-amd64 linux-arm64 windows-amd64 darwin-arm64; do
+            os="${target%%-*}"
+            arch="${target#*-}"
+            suffix=""
+            if [ "$os" = windows ]; then suffix=".exe"; fi
+            CGO_ENABLED=0 GOOS="$os" GOARCH="$arch" go build -trimpath -buildvcs=false -ldflags="-buildid=" -o "dist/workcell-rdte-${target}${suffix}" ./cmd/workcell-rdte
+          done
+          (cd dist && sha256sum workcell-rdte-* | LC_ALL=C sort > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - name: Upload synthetic packages only
+        uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: public-workcell-rdte-multiarch-${{ github.sha }}
+          path: rdte/public-workcell/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  windows-native-preflight:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: rdte/public-workcell
+        shell: pwsh
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Native Windows Go test
+        run: |
+          go version
+          go test -count=1 ./...
+          go vet ./...
+      - name: Synthetic temporary filesystem exercise
+        run: |
+          $receipt = (go run ./cmd/workcell-rdte exercise | Out-String | ConvertFrom-Json)
+          if (-not $receipt.destroy_verified -or $receipt.provider_effects -ne 'NONE') {
+            throw 'Synthetic workcell did not clean up'
+          }
+          Write-Host 'PASS: synthetic lifecycle/cleanup; no host/provider effects'
+      - name: Windows PowerShell 5.1 read-only preflight
+        shell: pwsh
+        run: |
+          $raw = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./rdte/public-workcell/scripts/Invoke-PublicWorkcellPreflight.ps1 -Stage Observe
+          $r = $raw | ConvertFrom-Json
+          if ($LASTEXITCODE -ne 0 -or -not $r.no_host_changes -or $r.live_vm_creation_tested -or $r.sovereign_network_tested) {
+            throw 'PS5.1 preflight violated read-only contract'
+          }
+          if ($r.powershell_major -ne 5) { throw 'Not native PS5.1' }
+          Write-Host 'PASS: native PS5.1 read-only preflight'
+          Write-Host $raw
+
+  macos-native-smoke:
+    runs-on: macos-15
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: rdte/public-workcell
+        shell: bash
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Go test and synthetic teardown
+        run: |
+          go version
+          go test -count=1 ./...
+          go vet ./...
+          go run ./cmd/workcell-rdte exercise
