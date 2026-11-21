@@ -48,7 +48,7 @@ func TestFaultBeforeAndAfterWriteAndRecovery(t *testing.T){
   if err:=Apply(root,p,p.Digest,"");err==nil{t.Fatal("incomplete state retried blindly")}
   if err:=Rollback(root,p.Digest);err!=nil{t.Fatal(err)}
   if err:=Destroy(root,p.Digest);err!=nil{t.Fatal(err)}
- }})}
+ })}
 }
 func TestUserEditAndForeignFileProtected(t *testing.T){
  root:=newRoot(t);p,_:=MakePlan(root)
