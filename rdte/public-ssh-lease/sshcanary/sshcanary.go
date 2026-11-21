@@ -112,7 +112,9 @@ func Start(g *Gate,ca,host ssh.Signer)(*Lab,error){
   if meta.User()!="public-canary"{return nil,errors.New("wrong user")}
   cert,ok:=pub.(*ssh.Certificate);if !ok{return nil,errors.New("no user certificate")}
   checker:=ssh.CertChecker{IsUserAuthority:func(key ssh.PublicKey)bool{return bytes.Equal(key.Marshal(),ca.PublicKey().Marshal())}}
-  if e:=checker.CheckCert(meta.User(),cert);e!=nil{return nil,e}
+  // CheckCert validates syntax/signature/expiry but NOT trusted-CA membership.
+  // Authenticate invokes IsUserAuthority before accepting a user cert.
+  if _,e:=checker.Authenticate(meta,pub);e!=nil{return nil,e}
   if e:=g.Check(cert);e!=nil{return nil,e}
   return &ssh.Permissions{},nil
  }}
