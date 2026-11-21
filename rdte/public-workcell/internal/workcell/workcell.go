@@ -38,6 +38,8 @@ func sum(b []byte) string { v:=sha256.Sum256(b);return hex.EncodeToString(v[:]) 
 func rootCheck(root string) (string,error) {
  if root=="" {return "",errors.New("root required")}
  abs,e:=filepath.Abs(root);if e!=nil{return "",e}
+ parent,e:=filepath.EvalSymlinks(filepath.Dir(abs));if e!=nil{return "",e}
+ abs=filepath.Join(parent,filepath.Base(abs))
  resolvedTemp,e:=filepath.EvalSymlinks(os.TempDir());if e!=nil{return "",e}
  // Only children of the system temp directory are allowed; root itself is forbidden.
  rel,e:=filepath.Rel(resolvedTemp,abs)
@@ -57,6 +59,8 @@ func rootCheck(root string) (string,error) {
 func Init(root string) error {
  if root=="" {return errors.New("root required")}
  abs,e:=filepath.Abs(root);if e!=nil{return e}
+ parent,e:=filepath.EvalSymlinks(filepath.Dir(abs));if e!=nil{return e}
+ abs=filepath.Join(parent,filepath.Base(abs))
  temp,e:=filepath.EvalSymlinks(os.TempDir());if e!=nil{return e}
  rel,e:=filepath.Rel(temp,abs)
  if e!=nil || rel=="." || rel==".." || strings.HasPrefix(rel,".."+string(os.PathSeparator)) || strings.ContainsRune(rel,os.PathSeparator) {return errors.New("root must be direct child of system temp")}
