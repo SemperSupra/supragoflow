@@ -130,3 +130,29 @@ jobs:
           go test -count=1 ./...
           go vet ./...
           go run ./cmd/workcell-rdte exercise
+
+  windows-hyperv-native-experiment:
+    runs-on: windows-2025
+    timeout-minutes: 15
+    needs: windows-native-preflight
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - name: Ephemeral hosted-runner differencing disk + no-network VM canary
+        shell: pwsh
+        run: |
+          $raw = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./rdte/public-workcell/scripts/Invoke-PublicHyperVCanary.ps1
+          if ($LASTEXITCODE -ne 0) { throw 'Owned Hyper-V workcell cleanup not proven' }
+          $r = $raw | ConvertFrom-Json
+          if (-not $r.cleanup_verified -or $r.guest_boot_tested -or $r.sovereign_network_tested) {
+            throw 'Hyper-V test violated isolation/cleanup boundaries'
+          }
+          if ($r.status -eq 'PASS_DISK_AND_VM_CONTROL_ONLY') {
+            Write-Host 'PASS: disposable runner owned differencing disk and VM create/verify/destroy'
+          } elseif ($r.status -eq 'BLOCKED_HYPERV_CAPABILITY') {
+            Write-Host 'BLOCKED: GitHub standard hosted runner lacks nested Hyper-V lifecycle capability'
+          } else {
+            throw 'Unrecognized native Hyper-V RDTE result'
+          }
+          Write-Host $raw
