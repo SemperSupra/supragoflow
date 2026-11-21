@@ -69,16 +69,22 @@ try {
 } finally {
     $phase = 'cleanup'
     try {
+        # A cmdlet may have created the VM but failed before returning its
+        # object. Recover by the random generation-scoped name, never wildcard.
+        $live = $null
         if ($null -ne $vm) {
             $live = Get-VM -Id $vm.Id -ErrorAction SilentlyContinue
-            if ($null -ne $live) {
-                if ($live.Id -ne $vm.Id) { throw 'VM identity mismatch before removal' }
-                if ($live.State -ne 'Off') { throw 'Unintended running VM; no forced delete' }
-                Remove-VM -VM $live -Force -ErrorAction Stop
-            }
-            if ($null -ne (Get-VM -Id $vm.Id -ErrorAction SilentlyContinue)) {
-                throw 'Owned VM remains after destroy'
-            }
+        } elseif ($createdDirectory) {
+            $live = Get-VM -Name $vmName -ErrorAction SilentlyContinue
+        }
+        if ($null -ne $live) {
+            if ($live.Name -ne $vmName) { throw 'VM generation mismatch before removal' }
+            if ($null -ne $vm -and $live.Id -ne $vm.Id) { throw 'VM identity mismatch before removal' }
+            if ($live.State -ne 'Off') { throw 'Unexpected running VM; preserve for triage' }
+            Remove-VM -VM $live -Force -ErrorAction Stop
+        }
+        if ($null -ne (Get-VM -Name $vmName -ErrorAction SilentlyContinue)) {
+            throw 'Owned VM remains after removal'
         }
         if ($createdDirectory) {
             if (-not (Test-Path -LiteralPath $ownerMarker -PathType Leaf)) {
