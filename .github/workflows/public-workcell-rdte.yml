@@ -32,6 +32,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # pinned v5
+        with:
+          go-version: '1.26.11'
+          cache: false
       - name: Go environment
         run: go version
       - name: Native race and negative tests
@@ -77,6 +81,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # pinned v5
+        with:
+          go-version: '1.26.11'
+          cache: false
       - name: Native Windows Go test
         run: |
           go version
@@ -112,6 +120,10 @@ jobs:
       - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
         with:
           persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # pinned v5
+        with:
+          go-version: '1.26.11'
+          cache: false
       - name: Go test and synthetic teardown
         run: |
           go version
