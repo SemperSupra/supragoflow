@@ -66,7 +66,7 @@ func TestForeignFilePreventsDestroy(t *testing.T){
 func TestRefusePreexistingOrNonTempRoot(t *testing.T){
  root:=newRoot(t)
  if err:=Init(root);err==nil{t.Fatal("preexisting root adopted")}
- if err:=Init(filepath.Join(filepath.Dir(os.TempDir()),"not-a-temporary-root"));err==nil{t.Fatal("non-temp root allowed")}
+ if err:=Init(filepath.Join(filepath.Dir(filepath.Clean(os.TempDir())),"not-a-temporary-root"));err==nil{t.Fatal("non-temp root allowed")}
 }
 func TestRefuseSymlinkAsPayload(t *testing.T){
  root:=newRoot(t)
