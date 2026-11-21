@@ -1,0 +1,96 @@
+{
+  "schema": "batch-wave/v1",
+  "wave": "public-example-r1",
+  "authority": "public-issue-example",
+  "cards": [
+    {
+      "id": "a-discover",
+      "workset": "example-a",
+      "branch": "test/public-discover",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actor": "test-actor-a",
+      "venue": "local-readonly",
+      "data_class": "public-safe",
+      "effect": "observe",
+      "depends": [],
+      "reads": [
+        "docs/example.md"
+      ],
+      "writes": [
+        "receipts/a.json"
+      ],
+      "resources": [
+        "actor/a"
+      ],
+      "steps": [
+        "Read synthetic fixture",
+        "Compare expected state",
+        "Write bounded receipt"
+      ],
+      "oracle": "Exact synthetic fixture digest and read-only status",
+      "rollback": "No mutation; discard temporary workcell",
+      "receipt": "example-issue-a",
+      "max_minutes": 8
+    },
+    {
+      "id": "b-validate",
+      "workset": "example-b",
+      "branch": "test/public-validate",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actor": "test-actor-b",
+      "venue": "public-gha",
+      "data_class": "public-safe",
+      "effect": "synthetic",
+      "depends": [],
+      "reads": [
+        "docs/example.md"
+      ],
+      "writes": [
+        "receipts/b.json"
+      ],
+      "resources": [
+        "runner/b"
+      ],
+      "steps": [
+        "Run pure synthetic negative tests",
+        "Write success or denial receipt"
+      ],
+      "oracle": "Exact SHA and negative assertions",
+      "rollback": "Dispose runner and its generated test files",
+      "receipt": "example-issue-b",
+      "max_minutes": 8
+    },
+    {
+      "id": "c-verify",
+      "workset": "example-c",
+      "branch": "test/public-verify",
+      "commit": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+      "actor": "test-actor-c",
+      "venue": "public-gha",
+      "data_class": "public-safe",
+      "effect": "synthetic",
+      "depends": [
+        "a-discover",
+        "b-validate"
+      ],
+      "reads": [
+        "receipts/a.json",
+        "receipts/b.json"
+      ],
+      "writes": [
+        "receipts/c.json"
+      ],
+      "resources": [
+        "runner/c"
+      ],
+      "steps": [
+        "Compare both synthetic receipts",
+        "Reject missing or mismatched evidence"
+      ],
+      "oracle": "Composite receipt explicit PASS/FAIL with same source digest",
+      "rollback": "Dispose synthetic verifier runner",
+      "receipt": "example-issue-c",
+      "max_minutes": 8
+    }
+  ]
+}
