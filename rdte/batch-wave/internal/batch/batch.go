@@ -65,7 +65,7 @@ func valid(s string, limit int) bool {
 }
 func validPath(s string) bool {
  if !valid(s,200)|| strings.Contains(s,"\\") || strings.HasPrefix(s,"/") || strings.Contains(s,":") ||
-    strings.HasPrefix(s,".") || path.Clean(s)!=s || s=="." {return false}
+    path.Clean(s)!=s || s=="." {return false}
  parts:=strings.Split(s,"/")
  for _,p:=range parts {if p=="."||p==".."||p==""{return false}}
  return true
