@@ -51,3 +51,20 @@ The actual local installer/workcell deployment remains gated on authorized nativ
 The public workflow writes `dist/SHA256SUMS` using deterministic cross-build flags, then publishes the binaries as a short-retention PR artifact. This is **not** a trusted signed release until independent review and release approval. Do not use a synthetic artifact as a remote-access installer.
 
 Runtimes are meant to be replaceable. Protected durable state is always external and is not simulated as safely disposable simply because a runner VM is transient. 
+
+## Optional native Hyper-V canary on a public Windows runner
+
+The isolated workflow job `windows-hyperv-native-experiment` uses a **separate
+short-lived standard hosted Windows runner** to attempt creating a synthetic
+1 GiB dynamic parent VHDX, differencing child, and an unbooted Generation 2
+Hyper-V VM **without a vSwitch or network**, then verify native API ownership
+and remove the exact created VM/disk directory in a finally block. The test
+strictly requires public GITHUB_ACTIONS + RUNNER_TEMP and refuses workstation
+execution. If nested Hyper-V is unsupported, the typed result is
+`BLOCKED_HYPERV_CAPABILITY`, not PASS. Any unverified cleanup fails the job.
+GitHub documentation does not officially support nested virtualization on
+standard hosted runners; native proof here cannot replace owner-host HIL.
+
+A successful `PASS_DISK_AND_VM_CONTROL_ONLY` still does **not** prove boot,
+cloud-init, guest service deployment, privileged remote reachability,
+Windows owner permissions, or network isolation for a running guest.
