@@ -1,0 +1,113 @@
+name: Public batch-wave microbaton conformance
+
+on:
+  pull_request:
+    paths:
+      - "rdte/batch-wave/**"
+      - ".github/workflows/public-batch-wave.yml"
+  push:
+    branches:
+      - "agent/issue-603-public-batch-preflight"
+    paths:
+      - "rdte/batch-wave/**"
+      - ".github/workflows/public-batch-wave.yml"
+
+permissions:
+  contents: read
+
+concurrency:
+  group: public-batch-wave-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  linux:
+    runs-on: ubuntu-24.04
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+        working-directory: rdte/batch-wave
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Race tests and vet
+        run: |
+          go test -race -count=1 ./...
+          go vet ./...
+      - name: Deterministic three-card wave
+        run: |
+          go run ./cmd/batch-wave plan examples/public-wave.json > /tmp/plan.json
+          grep -q '"card_count": 3' /tmp/plan.json
+          grep -q '"a-discover"' /tmp/plan.json
+          grep -q '"c-verify"' /tmp/plan.json
+          go run ./cmd/batch-wave baton examples/public-wave.json b-validate > /tmp/baton.json
+          grep -q '"id": "b-validate"' /tmp/baton.json
+          if grep -q 'a-discover"' /tmp/baton.json; then echo "leaked peer card"; exit 1; fi
+          cat /tmp/plan.json
+      - name: Cross-platform source-only binaries
+        run: |
+          mkdir -p dist
+          for target in linux-amd64 linux-arm64 windows-amd64 darwin-arm64; do
+            goos="${target%%-*}"; goarch="${target#*-}"; ext=""
+            [ "$goos" != windows ] || ext=".exe"
+            CGO_ENABLED=0 GOOS="$goos" GOARCH="$goarch" go build -trimpath -buildvcs=false -ldflags="-buildid=" -o "dist/batch-wave-${target}${ext}" ./cmd/batch-wave
+          done
+          (cd dist && sha256sum * | LC_ALL=C sort > SHA256SUMS)
+          cat dist/SHA256SUMS
+      - uses: actions/upload-artifact@ea165f8d65b6e75b540449e92b4886f43607fa02 # v4
+        with:
+          name: public-batch-wave-${{ github.sha }}
+          path: rdte/batch-wave/dist
+          if-no-files-found: error
+          retention-days: 7
+
+  windows:
+    runs-on: windows-2025
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: pwsh
+        working-directory: rdte/batch-wave
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Native Go tests / baton negative
+        run: |
+          go test -count=1 ./...
+          go vet ./...
+          $plan = go run ./cmd/batch-wave plan examples/public-wave.json | Out-String | ConvertFrom-Json
+          if ($plan.card_count -ne 3 -or $plan.parallel_waves.Count -ne 2) { throw 'bad wave construction' }
+          $baton = go run ./cmd/batch-wave baton examples/public-wave.json b-validate | Out-String | ConvertFrom-Json
+          if ($baton.card.id -ne 'b-validate') { throw 'bad bounded baton' }
+
+  macos:
+    runs-on: macos-15
+    timeout-minutes: 12
+    defaults:
+      run:
+        shell: bash
+        working-directory: rdte/batch-wave
+    steps:
+      - uses: actions/checkout@34e114876b0b11c390a56381ad16ebd13914f8d5 # v4
+        with:
+          persist-credentials: false
+      - uses: actions/setup-go@d35c59abb061a4a6fb18e82ac0862c26744d6ab5 # v5
+        with:
+          go-version: '1.26.11'
+          cache: false
+      - name: Native Go and deterministic plan
+        run: |
+          go test -count=1 ./...
+          go vet ./...
+          go run ./cmd/batch-wave plan examples/public-wave.json > /tmp/batch-plan.json
+          grep -q '"card_count": 3' /tmp/batch-plan.json
