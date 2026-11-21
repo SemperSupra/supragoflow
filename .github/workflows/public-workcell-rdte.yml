@@ -100,7 +100,7 @@ jobs:
       - name: Windows PowerShell 5.1 read-only preflight
         shell: pwsh
         run: |
-          $raw = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./rdte/public-workcell/scripts/Invoke-PublicWorkcellPreflight.ps1 -Stage Observe
+          $raw = & powershell.exe -NoProfile -NonInteractive -ExecutionPolicy Bypass -File ./scripts/Invoke-PublicWorkcellPreflight.ps1 -Stage Observe
           $r = $raw | ConvertFrom-Json
           if ($LASTEXITCODE -ne 0 -or -not $r.no_host_changes -or $r.live_vm_creation_tested -or $r.sovereign_network_tested) {
             throw 'PS5.1 preflight violated read-only contract'
